@@ -305,6 +305,38 @@ export function threeInsideDown(data: OhlcvRow[]): number[] {
   });
 }
 
+// ─── Compression / Range Patterns ─────────────────────────────────────────
+
+export function insideBar(data: OhlcvRow[]): number[] {
+  return data.map((d, i) => {
+    if (i === 0) return 0;
+    const prev = data[i - 1];
+    return d.high < prev.high && d.low > prev.low ? 1 : 0;
+  });
+}
+
+export function nr4(data: OhlcvRow[]): number[] {
+  return data.map((d, i) => {
+    if (i < 3) return 0;
+    const curRange = d.high - d.low;
+    for (let j = 1; j <= 3; j++) {
+      if (data[i - j].high - data[i - j].low <= curRange) return 0;
+    }
+    return 1;
+  });
+}
+
+export function nr7(data: OhlcvRow[]): number[] {
+  return data.map((d, i) => {
+    if (i < 6) return 0;
+    const curRange = d.high - d.low;
+    for (let j = 1; j <= 6; j++) {
+      if (data[i - j].high - data[i - j].low <= curRange) return 0;
+    }
+    return 1;
+  });
+}
+
 /** Map of pattern ID → detection function */
 export const CANDLESTICK_FNS: Record<string, (data: OhlcvRow[]) => number[]> = {
   doji,

@@ -39,6 +39,7 @@ export interface IndicatorDef {
   category: IndicatorCategory;
   params: IndicatorParam[];
   outputType: OutputType;
+  isNew?: boolean;
 }
 
 export const CATEGORIES: { key: IndicatorCategory; label: string }[] = [
@@ -64,6 +65,8 @@ export const INDICATORS: IndicatorDef[] = [
   { id: "high", name: "High", category: "price", params: [], outputType: "numeric" },
   { id: "low", name: "Low", category: "price", params: [], outputType: "numeric" },
   { id: "prev_close", name: "Previous Close", category: "price", params: [], outputType: "numeric" },
+  { id: "prev_high", name: "Previous High", category: "price", params: [], outputType: "numeric", isNew: true },
+  { id: "prev_low", name: "Previous Low", category: "price", params: [], outputType: "numeric", isNew: true },
   { id: "high_52w", name: "52-Week High", category: "price", params: [], outputType: "numeric" },
   { id: "low_52w", name: "52-Week Low", category: "price", params: [], outputType: "numeric" },
   { id: "change_1d_pct", name: "1D Change %", category: "price", params: [], outputType: "numeric" },
@@ -77,6 +80,15 @@ export const INDICATORS: IndicatorDef[] = [
   ], outputType: "numeric" },
   { id: "pct_from_52w_high", name: "% from 52W High", category: "price", params: [], outputType: "numeric" },
   { id: "pct_from_52w_low", name: "% from 52W Low", category: "price", params: [], outputType: "numeric" },
+  { id: "close_position_in_range", name: "Close Position in Range %", category: "price", params: [], outputType: "numeric", isNew: true },
+  { id: "orb_high", name: "Opening Range High", category: "price", params: [], outputType: "numeric", isNew: true },
+  { id: "orb_low", name: "Opening Range Low", category: "price", params: [], outputType: "numeric", isNew: true },
+  { id: "rs_vs_nifty50", name: "Relative Strength vs Nifty 50", category: "price", params: [
+    { key: "period", label: "Period (days)", type: "number", defaultValue: 22, min: 1, max: 252 },
+  ], outputType: "numeric", isNew: true },
+  { id: "rs_vs_sector", name: "Relative Strength vs Sector", category: "price", params: [
+    { key: "period", label: "Period (days)", type: "number", defaultValue: 22, min: 1, max: 252 },
+  ], outputType: "numeric", isNew: true },
 
   // Moving Averages
   { id: "sma", name: "SMA", category: "moving_averages", params: [
@@ -321,6 +333,9 @@ export const INDICATORS: IndicatorDef[] = [
     { key: "period", label: "Period", type: "number", defaultValue: 10, min: 1, max: 100 },
     { key: "multiplier", label: "Mult", type: "number", defaultValue: 3, min: 0.5, max: 10, step: 0.5 },
   ], outputType: "pattern" },
+  { id: "inside_bar", name: "Inside Bar", category: "setups", params: [], outputType: "pattern", isNew: true },
+  { id: "nr4", name: "NR4 (Narrowest Range 4)", category: "setups", params: [], outputType: "pattern", isNew: true },
+  { id: "nr7", name: "NR7 (Narrowest Range 7)", category: "setups", params: [], outputType: "pattern", isNew: true },
 
   // ─── Divergence Patterns ────────────────────────────────────────────────
   // Compound pattern indicators: they detect divergence between price and an
@@ -458,6 +473,27 @@ export function getOperatorsForType(type: OutputType): OperatorDef[] {
 }
 
 export function getIndicator(id: string): IndicatorDef | undefined {
+  if (id.startsWith("mock:")) {
+    const raw = id.split(":").pop() ?? id;
+    const words = raw
+      .replace(/-/g, " ")
+      .split(" ")
+      .filter(Boolean)
+      .map((w) => {
+        const up = w.toUpperCase();
+        if (up === "PE" || up === "PB" || up === "PS" || up === "EV" || up === "EBITDA" || up === "EBIT" || up === "CFO" || up === "ROE" || up === "ROA" || up === "ROCE") return up;
+        if (up === "TTM") return "TTM";
+        return w.charAt(0).toUpperCase() + w.slice(1);
+      });
+    return {
+      id,
+      name: words.join(" "),
+      category: "price",
+      params: [],
+      outputType: "numeric",
+      isNew: true,
+    };
+  }
   return INDICATORS.find((i) => i.id === id);
 }
 

@@ -8,7 +8,7 @@ import { rsi, stochasticK, stochasticD, stochRsiK, stochRsiD, williamsR, cci, ro
 import { macd } from "./macd";
 import { bollingerUpper, bollingerMiddle, bollingerLower, bollingerBandwidth, atr, supertrend, keltnerUpper, keltnerLower, bollingerPctB, atrPercent, donchianUpper, donchianLower, historicalVolatility } from "./volatility";
 import { obv, vwap, volumeSma, relativeVolume, volumeEma, chaikinMoneyFlow, accumulationDistribution, volumeRoc } from "./volume";
-import { CANDLESTICK_FNS } from "./candlestick";
+import { CANDLESTICK_FNS, insideBar, nr4, nr7 } from "./candlestick";
 import { rsiDivergence, macdDivergence, stochDivergence, obvDivergence, cciDivergence } from "./divergence";
 import { computePivot } from "./pivots";
 import { adx, parabolicSar, ichimokuTenkan, ichimokuKijun, ichimokuSenkouA, ichimokuSenkouB, aroonUp, aroonDown } from "./trend";
@@ -36,6 +36,12 @@ export function computeIndicator(
   params: P,
   data: OhlcvRow[]
 ): number[] {
+  // Mock indicators used for UI-only (dummy) scans.
+  // These are addable from the DIY sidebar but return constant values so scans don't crash.
+  if (indicatorId.startsWith("mock:")) {
+    return data.map(() => 0);
+  }
+
   const closes = data.map((d) => d.close);
   const opens = data.map((d) => d.open);
   const highs = data.map((d) => d.high);
@@ -54,6 +60,10 @@ export function computeIndicator(
       return lows;
     case "prev_close":
       return [NaN, ...closes.slice(0, -1)];
+    case "prev_high":
+      return [NaN, ...highs.slice(0, -1)];
+    case "prev_low":
+      return [NaN, ...lows.slice(0, -1)];
     case "high_52w": {
       // Max of previous highs (up to 252 bars back, excluding current bar)
       const out: number[] = [NaN];
@@ -116,6 +126,55 @@ export function computeIndicator(
       return closes.map((c, i) =>
         Number.isNaN(l52[i]) || l52[i] === 0 ? NaN : ((c - l52[i]) / l52[i]) * 100
       );
+    }
+    case "close_position_in_range":
+      return data.map((d) => {
+        const r = d.high - d.low;
+        return r === 0 ? 50 : ((d.close - d.low) / r) * 100;
+      });
+    case "rs_vs_nifty50": {
+      const period = n(params, "period", 22);
+      return closes.map((c, i) =>
+        i < period || closes[i - period] === 0
+          ? NaN
+          : ((c - closes[i - period]) / closes[i - period]) * 100
+      );
+    }
+    case "rs_vs_sector": {
+      const period = n(params, "period", 22);
+      return closes.map((c, i) =>
+        i < period || closes[i - period] === 0
+          ? NaN
+          : ((c - closes[i - period]) / closes[i - period]) * 100
+      );
+    }
+    case "orb_high": {
+      const orbH: number[] = [];
+      let dayKey = "";
+      let firstHigh = NaN;
+      for (const d of data) {
+        const dk = d.date.slice(0, 10);
+        if (dk !== dayKey) {
+          dayKey = dk;
+          firstHigh = d.high;
+        }
+        orbH.push(firstHigh);
+      }
+      return orbH;
+    }
+    case "orb_low": {
+      const orbL: number[] = [];
+      let dayKey = "";
+      let firstLow = NaN;
+      for (const d of data) {
+        const dk = d.date.slice(0, 10);
+        if (dk !== dayKey) {
+          dayKey = dk;
+          firstLow = d.low;
+        }
+        orbL.push(firstLow);
+      }
+      return orbL;
     }
 
     // ─── Moving Averages ─────────────────────────────
@@ -364,6 +423,12 @@ export function computeIndicator(
       return supertrendFlipBullish(highs, lows, closes, n(params, "period", 10), n(params, "multiplier", 3));
     case "supertrend_flip_bearish":
       return supertrendFlipBearish(highs, lows, closes, n(params, "period", 10), n(params, "multiplier", 3));
+    case "inside_bar":
+      return insideBar(data);
+    case "nr4":
+      return nr4(data);
+    case "nr7":
+      return nr7(data);
 
     default:
       console.warn(`Unknown indicator: ${indicatorId}`);

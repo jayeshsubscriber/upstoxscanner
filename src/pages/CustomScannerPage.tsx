@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   CATEGORIES,
@@ -205,20 +206,35 @@ const VALUATION_ITEMS = [
   "Sector Dividend Yield",
 ];
 
-import { X, Plus, Play, Search, RefreshCw, Loader2, Sparkles, Settings, Lock, Save, Trash2 } from "lucide-react";
+const FINANCIAL_RATIOS_ITEMS = [
+  "Market Cap",
+  "ROE",
+  "ROA",
+  "ROCE",
+  "Debt to Equity",
+  "Current Ratio",
+  "Quick Ratio",
+  "Interest Coverage",
+  "Book Value per Share",
+];
+
+function mockIndicatorId(namespace: string, label: string) {
+  const slug = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  return `mock:${namespace}:${slug}`;
+}
+
+import { X, Plus, Play, Search, Loader2, Sparkles, Lock } from "lucide-react";
 import type { ConditionState, GroupState, QueryState, ScanResultRow, ScanProgress, IndicatorColumn } from "@/types/screener";
 import { runCustomScan, extractIndicatorColumns } from "@/lib/customScanRunner";
-import { getCachedScanResult, setCachedScanResult, clearCachedScanResult } from "@/lib/screenerResultsCache";
 import { loadTokenFromSupabase, saveTokenToSupabase, getTokenStatus } from "@/lib/upstoxTokenStore";
 import { refreshDailyCandles, refresh15mCandles, refreshMonthlyCandles, getDataFreshness, type PipelineProgress } from "@/lib/scannerDataPipeline";
-import {
-  listSavedScreeners,
-  getSavedScreener,
-  createSavedScreener,
-  updateSavedScreener,
-  deleteSavedScreener,
-  type SavedScreener,
-} from "@/lib/savedScreeners";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Field } from "@/components/ui/field";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -364,7 +380,7 @@ function IndicatorSelect({
           <optgroup key={cat.key} label={cat.label}>
             {items.map((ind) => (
               <option key={ind.id} value={ind.id}>
-                {ind.name}
+                {ind.name}{ind.isNew ? " ✦ New" : ""}
               </option>
             ))}
           </optgroup>
@@ -468,6 +484,13 @@ function ConditionCard({
     opDef?.timeModifier === "optional_within" ||
     opDef?.timeModifier === "required_for";
   const forceTimeMod = opDef?.timeModifier === "required_for";
+  const inlineTimeMod =
+    forceTimeMod ||
+    condition.operator === "crossed_above" ||
+    condition.operator === "crossed_below";
+  const hideRightMultiplier =
+    condition.operator === "crossed_above" ||
+    condition.operator === "crossed_below";
 
   function update(patch: Partial<ConditionState>) {
     onChange({ ...condition, ...patch });
@@ -492,11 +515,15 @@ function ConditionCard({
 
   function handleOperatorChange(newOp: string) {
     const opId = newOp as OperatorId;
-    const force = opId === "is_increasing" || opId === "is_decreasing";
+    const force =
+      opId === "is_increasing" ||
+      opId === "is_decreasing" ||
+      opId === "crossed_above" ||
+      opId === "crossed_below";
     update({
       operator: opId || "",
       hasTimeModifier: force,
-      timeModifierBars: force ? 3 : 5,
+      timeModifierBars: force ? 1 : 5,
     });
   }
 
@@ -599,25 +626,29 @@ function ConditionCard({
           ) : (
             <>
               <div className="flex items-center gap-1.5">
-                <Input
-                  type="number"
-                  value={condition.rightMultiplier}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    update({ rightMultiplier: raw === "" ? ("" as unknown as number) : Number(raw) });
-                  }}
-                  onBlur={(e) => {
-                    const v = Number(e.target.value);
-                    if (!v || isNaN(v)) update({ rightMultiplier: 1 });
-                  }}
-                  className="h-8 w-14 text-sm text-center shrink-0"
-                  step={0.1}
-                  min={0.01}
-                  title="Multiplier (e.g. 2 means 2× the indicator)"
-                />
-                <span className="text-sm font-medium text-muted-foreground shrink-0">
-                  ×
-                </span>
+                {!hideRightMultiplier && (
+                  <>
+                    <Input
+                      type="number"
+                      value={condition.rightMultiplier}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        update({ rightMultiplier: raw === "" ? ("" as unknown as number) : Number(raw) });
+                      }}
+                      onBlur={(e) => {
+                        const v = Number(e.target.value);
+                        if (!v || isNaN(v)) update({ rightMultiplier: 1 });
+                      }}
+                      className="h-8 w-14 text-sm text-center shrink-0"
+                      step={0.1}
+                      min={0.01}
+                      title="Multiplier (e.g. 2 means 2× the indicator)"
+                    />
+                    <span className="text-sm font-medium text-muted-foreground shrink-0">
+                      ×
+                    </span>
+                  </>
+                )}
                 <div className="flex-1 min-w-0">
                   <IndicatorSelect
                     value={condition.rightIndicatorId}
@@ -669,7 +700,7 @@ function ConditionCard({
       {/* Time modifier */}
       {showTimeMod && (
         <div className="mt-2 space-y-1.5">
-          {forceTimeMod ? (
+          {inlineTimeMod ? (
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground whitespace-nowrap">for</span>
               <Input
@@ -681,7 +712,7 @@ function ConditionCard({
                 }}
                 onBlur={(e) => {
                   const v = Number(e.target.value);
-                  if (!v || isNaN(v)) update({ timeModifierBars: 3 });
+                  if (!v || isNaN(v)) update({ timeModifierBars: 1 });
                 }}
                 className="h-6 w-12 text-xs px-1.5"
                 min={1}
@@ -936,6 +967,10 @@ function queryToSimple(query: QueryState): SimpleConditionRow[] {
   return rows;
 }
 
+if (import.meta.env.DEV) {
+  void queryToSimple;
+}
+
 // ─── Indicator Sidebar ──────────────────────────────────────────────────────
 
 function ConditionGroupSidebar({
@@ -981,7 +1016,7 @@ function IndicatorSidebar({
   onSelect: (id: string) => void;
   excludePatterns?: boolean;
   activeCategories?: IndicatorCategory[] | null;
-  customItems?: { label: string; locked?: boolean }[];
+  customItems?: { id: string; label: string; locked?: boolean }[];
   disableSelection?: boolean;
 }) {
   const q = search.trim().toLowerCase();
@@ -1001,8 +1036,12 @@ function IndicatorSidebar({
         <div className="flex-1 overflow-y-auto px-2 py-2">
           {filtered.map((item) => (
             <button
-              key={item.label}
+              key={item.id}
               type="button"
+              onClick={() => {
+                if (disableSelection) return;
+                onSelect(item.id);
+              }}
               aria-disabled={disableSelection}
               className={cn(
                 "w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg text-left",
@@ -1056,7 +1095,14 @@ function IndicatorSidebar({
                   onClick={() => onSelect(ind.id)}
                   className="w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg hover:bg-primary/5 transition-colors text-left"
                 >
-                  <span>{ind.name}</span>
+                  <span className="flex items-center gap-1.5">
+                    {ind.name}
+                    {ind.isNew && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary font-semibold">
+                        New
+                      </Badge>
+                    )}
+                  </span>
                   <span className="text-muted-foreground">›</span>
                 </button>
               ))}
@@ -1151,6 +1197,7 @@ function SimpleConditionForm({
   onDelete,
   canDelete,
   onIndicatorClick,
+  variant = "card",
 }: {
   condition: SimpleConditionRow;
   index: number;
@@ -1158,9 +1205,11 @@ function SimpleConditionForm({
   onDelete: () => void;
   canDelete: boolean;
   onIndicatorClick: (side: "left" | "right") => void;
+  variant?: "card" | "accordion";
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [paramModal, setParamModal] = useState<"left" | "right" | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const leftInd = condition.leftIndicatorId ? getIndicator(condition.leftIndicatorId) : null;
   const rightInd = condition.rightIndicatorId ? getIndicator(condition.rightIndicatorId) : null;
@@ -1170,6 +1219,64 @@ function SimpleConditionForm({
   const isRange = opDef?.rightType === "range";
   const showTimeMod = opDef?.timeModifier === "optional_within" || opDef?.timeModifier === "required_for";
   const forceTimeMod = opDef?.timeModifier === "required_for";
+  const inlineTimeMod =
+    forceTimeMod ||
+    condition.operator === "crossed_above" ||
+    condition.operator === "crossed_below";
+  const hideRightMultiplier =
+    condition.operator === "crossed_above" ||
+    condition.operator === "crossed_below";
+
+  function presetOptionsFor(indicatorId: string | null, params: Record<string, unknown>) {
+    if (!indicatorId) return null;
+    const MA_IDS = new Set(["sma", "ema", "wma", "hull_ma", "vwma", "dema", "tema"]);
+    const VOL_MA_IDS = new Set(["volume_sma", "volume_ema"]);
+    const SUPER_IDS = new Set(["supertrend", "supertrend_flip_bullish", "supertrend_flip_bearish"]);
+
+    if (MA_IDS.has(indicatorId)) {
+      const periods = [9, 20, 21, 50, 100, 200];
+      return {
+        label: "Length",
+        value: String((params as Record<string, unknown>)?.period ?? 20),
+        options: periods.map((p) => ({ value: String(p), label: String(p), params: { period: p } })),
+        kind: "period" as const,
+      };
+    }
+    if (VOL_MA_IDS.has(indicatorId)) {
+      const periods = [10, 20, 50];
+      return {
+        label: "Length",
+        value: String((params as Record<string, unknown>)?.period ?? 20),
+        options: periods.map((p) => ({ value: String(p), label: String(p), params: { period: p } })),
+        kind: "period" as const,
+      };
+    }
+    if (SUPER_IDS.has(indicatorId)) {
+      const combos: Array<{ period: number; multiplier: number }> = [
+        { period: 10, multiplier: 3 },
+        { period: 7, multiplier: 2 },
+        { period: 10, multiplier: 2 },
+        { period: 14, multiplier: 3 },
+      ];
+      const currentPeriod = Number((params as Record<string, unknown>)?.period ?? 10);
+      const currentMult = Number((params as Record<string, unknown>)?.multiplier ?? 3);
+      const current = `${currentPeriod},${currentMult}`;
+      return {
+        label: "Preset",
+        value: current,
+        options: combos.map((c) => ({
+          value: `${c.period},${c.multiplier}`,
+          label: `(${c.period}, ${c.multiplier})`,
+          params: { period: c.period, multiplier: c.multiplier },
+        })),
+        kind: "combo" as const,
+      };
+    }
+    return null;
+  }
+
+  const leftPreset = presetOptionsFor(condition.leftIndicatorId || null, condition.leftParams as Record<string, unknown>);
+  const rightPreset = presetOptionsFor(condition.rightIndicatorId || null, condition.rightParams as Record<string, unknown>);
 
   function leftLabel() {
     if (!leftInd) return "";
@@ -1188,107 +1295,167 @@ function SimpleConditionForm({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-white overflow-hidden relative">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/40">
-        <span className="text-sm font-semibold text-foreground">
-          Condition {index + 1}
-        </span>
-        <div className="flex items-center gap-1.5">
-          {canDelete && (
+    <div className={cn(
+      variant === "card" ? "rounded-xl border border-border bg-white overflow-hidden relative" : "bg-transparent"
+    )}>
+      {variant === "card" && (
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/40">
+          <span className="text-sm font-semibold text-foreground">
+            Condition {index + 1}
+          </span>
+          <div className="flex items-center gap-1.5">
+            {canDelete && (
+              <button
+                onClick={onDelete}
+                className="w-7 h-7 flex items-center justify-center rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                title="Delete condition"
+              >
+                <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4m2 0v9.33a1.33 1.33 0 01-1.34 1.34H4.67a1.33 1.33 0 01-1.34-1.34V4h9.34z" />
+                </svg>
+              </button>
+            )}
             <button
-              onClick={onDelete}
-              className="w-7 h-7 flex items-center justify-center rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-              title="Delete condition"
+              onClick={() => setCollapsed(!collapsed)}
+              className="w-7 h-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              title={collapsed ? "Expand" : "Collapse"}
             >
-              <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4m2 0v9.33a1.33 1.33 0 01-1.34 1.34H4.67a1.33 1.33 0 01-1.34-1.34V4h9.34z" />
+              <svg
+                className={cn("w-4 h-4 transition-transform", collapsed && "rotate-180")}
+                viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
+              >
+                <path d="M4 6l4 4 4-4" />
               </svg>
             </button>
-          )}
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-            title={collapsed ? "Expand" : "Collapse"}
-          >
-            <svg
-              className={cn("w-4 h-4 transition-transform", collapsed && "rotate-180")}
-              viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
-            >
-              <path d="M4 6l4 4 4-4" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {!collapsed && (
-        <div className="p-4 space-y-4">
-          {/* Timeframe */}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Timeframe</label>
-            <select
-              value={condition.timeframe}
-              onChange={(e) => onChange({ timeframe: e.target.value })}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {SUPPORTED_TIMEFRAMES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
           </div>
+        </div>
+      )}
 
-          {/* Indicator (left) */}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Indicator</label>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => onIndicatorClick("left")}
-                className={cn(
-                  "h-9 flex-1 flex items-center justify-between rounded-md border border-input px-2 text-sm text-left hover:bg-accent/50 transition-colors",
-                  !condition.leftIndicatorId && "text-muted-foreground"
+      {(variant !== "card" || !collapsed) && (
+        <div className={cn(variant === "card" ? "p-4 space-y-4" : "space-y-4")}>
+          <div className="grid grid-cols-12 gap-2 items-end">
+            {/* Indicator (left) */}
+            <div className="col-span-8">
+              <div className="flex items-stretch gap-2">
+                <Field label="Indicator" className="flex-1" contentClassName="px-2 py-1">
+                  <button
+                    onClick={() => onIndicatorClick("left")}
+                    className={cn(
+                      "h-8 w-full flex items-center justify-between rounded-md bg-transparent px-1 text-sm text-left hover:bg-accent/50 transition-colors",
+                      !condition.leftIndicatorId && "text-muted-foreground"
+                    )}
+                  >
+                    <span className="truncate">{condition.leftIndicatorId ? leftLabel() : "Select indicator..."}</span>
+                    <span className="text-muted-foreground ml-1">›</span>
+                  </button>
+                </Field>
+                {leftInd && leftInd.params.length > 0 && (
+                  leftPreset ? (
+                    <Field label={leftPreset.label} className="w-28 shrink-0" contentClassName="px-2 py-1">
+                      <div className="relative">
+                        <select
+                          value={leftPreset.value}
+                          onChange={(e) => {
+                            const opt = leftPreset.options.find((o) => o.value === e.target.value);
+                            if (opt) onChange({ leftParams: opt.params });
+                          }}
+                          className="h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0"
+                        >
+                          {leftPreset.options.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                        <svg
+                          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M4 6l4 4 4-4" />
+                        </svg>
+                      </div>
+                    </Field>
+                  ) : (
+                    <button
+                      onClick={() => setParamModal("left")}
+                      className="w-12 rounded-md border border-input bg-background flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
+                      title="Customize parameters"
+                    >
+                      <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="3" cy="4" r="1.5" /><line x1="5" y1="4" x2="15" y2="4" />
+                        <circle cx="10" cy="8" r="1.5" /><line x1="1" y1="8" x2="8" y2="8" /><line x1="12" y1="8" x2="15" y2="8" />
+                        <circle cx="6" cy="12" r="1.5" /><line x1="1" y1="12" x2="4" y2="12" /><line x1="8" y1="12" x2="15" y2="12" />
+                      </svg>
+                    </button>
+                  )
                 )}
-              >
-                <span className="truncate">{condition.leftIndicatorId ? leftLabel() : "Select indicator..."}</span>
-                <span className="text-muted-foreground ml-1">›</span>
-              </button>
-              {leftInd && leftInd.params.length > 0 && (
-                <button
-                  onClick={() => setParamModal("left")}
-                  className="h-9 w-9 shrink-0 flex items-center justify-center rounded-md border border-input text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
-                  title="Customize parameters"
-                >
-                  <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <circle cx="3" cy="4" r="1.5" /><line x1="5" y1="4" x2="15" y2="4" />
-                    <circle cx="10" cy="8" r="1.5" /><line x1="1" y1="8" x2="8" y2="8" /><line x1="12" y1="8" x2="15" y2="8" />
-                    <circle cx="6" cy="12" r="1.5" /><line x1="1" y1="12" x2="4" y2="12" /><line x1="8" y1="12" x2="15" y2="12" />
+              </div>
+            </div>
+
+            {/* Timeframe (right) */}
+            <div className="col-span-4">
+              <Field label="Timeframe" contentClassName="px-2 py-1">
+                <div className="relative">
+                  <select
+                    value={condition.timeframe}
+                    onChange={(e) => onChange({ timeframe: e.target.value })}
+                    className="h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0"
+                  >
+                    {SUPPORTED_TIMEFRAMES.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                  <svg
+                    className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M4 6l4 4 4-4" />
                   </svg>
-                </button>
-              )}
+                </div>
+              </Field>
             </div>
           </div>
 
           {/* Condition (operator) */}
           {leftInd && (
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Condition</label>
-              <select
-                value={condition.operator}
-                onChange={(e) => {
-                  const opId = e.target.value as OperatorId;
-                  const force = opId === "is_increasing" || opId === "is_decreasing";
-                  onChange({ operator: opId || ("" as OperatorId), hasTimeModifier: force, timeModifierBars: force ? 3 : 5 });
-                }}
-                className={cn(
-                  "h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  !condition.operator && "text-muted-foreground"
-                )}
-              >
-                <option value="">Select condition...</option>
-                {validOps.map((op) => (
-                  <option key={op.id} value={op.id}>{op.label}</option>
-                ))}
-              </select>
-            </div>
+            <Field label="Condition" contentClassName="px-2 py-1">
+              <div className="relative">
+                <select
+                  value={condition.operator}
+                  onChange={(e) => {
+                    const opId = e.target.value as OperatorId;
+                    const force =
+                      opId === "is_increasing" ||
+                      opId === "is_decreasing" ||
+                      opId === "crossed_above" ||
+                      opId === "crossed_below";
+                  onChange({ operator: opId || ("" as OperatorId), hasTimeModifier: force, timeModifierBars: force ? 1 : 5 });
+                  }}
+                  className={cn(
+                    "h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0",
+                    !condition.operator && "text-muted-foreground"
+                  )}
+                >
+                  <option value="">Select condition...</option>
+                  {validOps.map((op) => (
+                    <option key={op.id} value={op.id}>{op.label}</option>
+                  ))}
+                </select>
+                <svg
+                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M4 6l4 4 4-4" />
+                </svg>
+              </div>
+            </Field>
           )}
 
           {/* Right operand */}
@@ -1323,34 +1490,64 @@ function SimpleConditionForm({
               ) : (
                 <div className="flex gap-2">
                   <div className="flex-1 min-w-0">
-                    <label className="text-xs font-medium text-muted-foreground block mb-1">Indicator 2</label>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => onIndicatorClick("right")}
-                        className={cn(
-                          "h-9 flex-1 flex items-center justify-between rounded-md border border-input px-2 text-sm text-left hover:bg-accent/50 transition-colors",
-                          !condition.rightIndicatorId && "text-muted-foreground"
-                        )}
-                      >
-                        <span className="truncate">{condition.rightIndicatorId ? rightLabel() : "Select indicator..."}</span>
-                        <span className="text-muted-foreground ml-1">›</span>
-                      </button>
-                      {rightInd && rightInd.params.length > 0 && (
+                    <div className="flex items-stretch gap-2">
+                      <Field label="Indicator 2" className="flex-1" contentClassName="px-2 py-1">
                         <button
-                          onClick={() => setParamModal("right")}
-                          className="h-9 w-9 shrink-0 flex items-center justify-center rounded-md border border-input text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
-                          title="Customize parameters"
+                          onClick={() => onIndicatorClick("right")}
+                          className={cn(
+                            "h-8 w-full flex items-center justify-between rounded-md bg-transparent px-1 text-sm text-left hover:bg-accent/50 transition-colors",
+                            !condition.rightIndicatorId && "text-muted-foreground"
+                          )}
                         >
-                          <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-                            <circle cx="3" cy="4" r="1.5" /><line x1="5" y1="4" x2="15" y2="4" />
-                            <circle cx="10" cy="8" r="1.5" /><line x1="1" y1="8" x2="8" y2="8" /><line x1="12" y1="8" x2="15" y2="8" />
-                            <circle cx="6" cy="12" r="1.5" /><line x1="1" y1="12" x2="4" y2="12" /><line x1="8" y1="12" x2="15" y2="12" />
-                          </svg>
+                          <span className="truncate">{condition.rightIndicatorId ? rightLabel() : "Select indicator..."}</span>
+                          <span className="text-muted-foreground ml-1">›</span>
                         </button>
+                      </Field>
+                      {rightInd && rightInd.params.length > 0 && (
+                        rightPreset ? (
+                          <Field label={rightPreset.label} className="w-28 shrink-0" contentClassName="px-2 py-1">
+                            <div className="relative">
+                              <select
+                                value={rightPreset.value}
+                                onChange={(e) => {
+                                  const opt = rightPreset.options.find((o) => o.value === e.target.value);
+                                  if (opt) onChange({ rightParams: opt.params });
+                                }}
+                                className="h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0"
+                              >
+                                {rightPreset.options.map((o) => (
+                                  <option key={o.value} value={o.value}>{o.label}</option>
+                                ))}
+                              </select>
+                              <svg
+                                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M4 6l4 4 4-4" />
+                              </svg>
+                            </div>
+                          </Field>
+                        ) : (
+                          <button
+                            onClick={() => setParamModal("right")}
+                            className="w-12 rounded-md border border-input bg-background flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
+                            title="Customize parameters"
+                          >
+                            <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <circle cx="3" cy="4" r="1.5" /><line x1="5" y1="4" x2="15" y2="4" />
+                              <circle cx="10" cy="8" r="1.5" /><line x1="1" y1="8" x2="8" y2="8" /><line x1="12" y1="8" x2="15" y2="8" />
+                              <circle cx="6" cy="12" r="1.5" /><line x1="1" y1="12" x2="4" y2="12" /><line x1="8" y1="12" x2="15" y2="12" />
+                            </svg>
+                          </button>
+                        )
                       )}
                     </div>
                   </div>
-                  <div className="shrink-0">
+                  {!hideRightMultiplier && (
+                    <div className="shrink-0">
                     <label className="text-xs font-medium text-muted-foreground block mb-1">Multiplier</label>
                     <Input
                       type="number"
@@ -1368,7 +1565,8 @@ function SimpleConditionForm({
                       min={0.01}
                       title="Multiplier"
                     />
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1377,33 +1575,34 @@ function SimpleConditionForm({
           {/* Range (is_between) */}
           {opDef && isRange && (
             <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Range</label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={condition.rightValue}
-                  onChange={(e) => onChange({ rightValue: e.target.value })}
-                  placeholder="Min"
-                  className="h-9 text-sm flex-1"
-                />
-                <span className="text-xs text-muted-foreground shrink-0">and</span>
-                <Input
-                  type="number"
-                  value={condition.rightValue2}
-                  onChange={(e) => onChange({ rightValue2: e.target.value })}
-                  placeholder="Max"
-                  className="h-9 text-sm flex-1"
-                />
+              <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center">
+                <Field label="Min" contentClassName="px-2 py-1" className="w-full">
+                  <Input
+                    type="number"
+                    value={condition.rightValue}
+                    onChange={(e) => onChange({ rightValue: e.target.value })}
+                    className="h-8 w-full border-0 bg-transparent px-1 text-sm focus-visible:ring-0"
+                  />
+                </Field>
+                <span className="text-sm text-muted-foreground text-center">to</span>
+                <Field label="Max" contentClassName="px-2 py-1" className="w-full">
+                  <Input
+                    type="number"
+                    value={condition.rightValue2}
+                    onChange={(e) => onChange({ rightValue2: e.target.value })}
+                    className="h-8 w-full border-0 bg-transparent px-1 text-sm focus-visible:ring-0"
+                  />
+                </Field>
               </div>
             </div>
           )}
 
-          {/* Time modifier */}
+          {/* Advanced (time modifiers, etc.) */}
           {showTimeMod && (
             <div>
-              {forceTimeMod ? (
+              {inlineTimeMod ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">for</span>
+                  <span className="text-sm text-muted-foreground">for</span>
                   <Input
                     type="number"
                     value={condition.timeModifierBars}
@@ -1411,50 +1610,23 @@ function SimpleConditionForm({
                       const raw = e.target.value;
                       onChange({ timeModifierBars: raw === "" ? ("" as unknown as number) : Number(raw) });
                     }}
-                    onBlur={(e) => { if (!Number(e.target.value)) onChange({ timeModifierBars: 3 }); }}
-                    className="h-7 w-14 text-xs px-1.5"
-                    min={1} max={200}
+                    onBlur={(e) => { if (!Number(e.target.value)) onChange({ timeModifierBars: 1 }); }}
+                    className="h-9 w-24 text-sm"
+                    min={1}
+                    max={200}
                   />
-                  <span className="text-xs text-muted-foreground">consecutive bars</span>
+                  <span className="text-sm text-muted-foreground">consecutive bars</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <input
-                    type="checkbox"
-                    checked={condition.hasTimeModifier}
-                    onChange={(e) => onChange({ hasTimeModifier: e.target.checked })}
-                    className="rounded border-border accent-primary"
-                  />
-                  {condition.hasTimeModifier ? (
-                    <>
-                      <select
-                        value={condition.timeModifierMode}
-                        onChange={(e) => onChange({ timeModifierMode: e.target.value as SimpleConditionRow["timeModifierMode"] })}
-                        className="h-7 rounded border border-input bg-transparent px-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <option value="within_last">Within last</option>
-                        <option value="exactly_ago">Exactly</option>
-                        <option value="all_of_last">All of last</option>
-                      </select>
-                      <Input
-                        type="number"
-                        value={condition.timeModifierBars}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          onChange({ timeModifierBars: raw === "" ? ("" as unknown as number) : Number(raw) });
-                        }}
-                        onBlur={(e) => { if (!Number(e.target.value)) onChange({ timeModifierBars: 5 }); }}
-                        className="h-7 w-14 text-xs px-1.5"
-                        min={1} max={200}
-                      />
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {condition.timeModifierMode === "exactly_ago" ? "bars ago" : "bars"}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">Add time constraint</span>
-                  )}
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-9"
+                  onClick={() => setAdvancedOpen(true)}
+                >
+                  Advanced
+                </Button>
               )}
             </div>
           )}
@@ -1480,6 +1652,86 @@ function SimpleConditionForm({
           onClose={() => setParamModal(null)}
         />
       )}
+
+      {/* Advanced modal */}
+      <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Advanced</DialogTitle>
+            <DialogDescription>
+              Add time constraints and fine-tune how this condition is evaluated.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Time modifier
+              </p>
+
+              {forceTimeMod ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">for</span>
+                  <Input
+                    type="number"
+                    value={condition.timeModifierBars}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      onChange({ timeModifierBars: raw === "" ? ("" as unknown as number) : Number(raw) });
+                    }}
+                    onBlur={(e) => { if (!Number(e.target.value)) onChange({ timeModifierBars: 1 }); }}
+                    className="h-9 w-24 text-sm"
+                    min={1}
+                    max={200}
+                  />
+                  <span className="text-sm text-muted-foreground">consecutive bars</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={condition.hasTimeModifier}
+                      onChange={(e) => onChange({ hasTimeModifier: e.target.checked })}
+                      className="rounded border-border accent-primary"
+                    />
+                    <span className="text-foreground">Add time constraint</span>
+                  </label>
+
+                  {condition.hasTimeModifier && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <select
+                        value={condition.timeModifierMode}
+                        onChange={(e) => onChange({ timeModifierMode: e.target.value as SimpleConditionRow["timeModifierMode"] })}
+                        className="h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset appearance-none"
+                      >
+                        <option value="within_last">Within last</option>
+                        <option value="exactly_ago">Exactly</option>
+                        <option value="all_of_last">All of last</option>
+                      </select>
+                      <Input
+                        type="number"
+                        value={condition.timeModifierBars}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          onChange({ timeModifierBars: raw === "" ? ("" as unknown as number) : Number(raw) });
+                        }}
+                        onBlur={(e) => { if (!Number(e.target.value)) onChange({ timeModifierBars: 5 }); }}
+                        className="h-9 w-24 text-sm"
+                        min={1}
+                        max={200}
+                      />
+                      <span className="text-sm text-muted-foreground whitespace-nowrap">
+                        {condition.timeModifierMode === "exactly_ago" ? "bars ago" : "bars"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1507,63 +1759,207 @@ function SimpleBuilderView({
     onChange(conditions.filter((c) => c.id !== id));
   }
 
+  const SECTORS = [
+    { name: "Aerospace & Defence", count: 31 },
+    { name: "Agro Chemicals", count: 24 },
+    { name: "Air Transport Service", count: 5 },
+    { name: "Alcoholic Beverages", count: 16 },
+    { name: "Auto Ancillaries", count: 81 },
+    { name: "Automobile", count: 23 },
+    { name: "Banks", count: 41 },
+    { name: "Bearings", count: 7 },
+    { name: "Cables", count: 22 },
+    { name: "Capital Goods - Electrical Equipment", count: 77 },
+    { name: "Cement", count: 19 },
+    { name: "Chemicals", count: 102 },
+    { name: "Consumer Durables", count: 56 },
+    { name: "FMCG", count: 48 },
+    { name: "Healthcare", count: 92 },
+    { name: "IT Services", count: 67 },
+    { name: "Metals", count: 44 },
+    { name: "Oil & Gas", count: 26 },
+    { name: "Pharma", count: 118 },
+    { name: "Power", count: 35 },
+    { name: "Real Estate", count: 28 },
+    { name: "Telecom", count: 9 },
+  ];
+
+  const [sectorQuery, setSectorQuery] = useState("");
+  const [showAllSectors, setShowAllSectors] = useState(false);
+  const [selectedSectors, setSelectedSectors] = useState<Set<string>>(new Set());
+
+  const filteredSectors = SECTORS.filter((s) =>
+    !sectorQuery.trim()
+      ? true
+      : s.name.toLowerCase().includes(sectorQuery.trim().toLowerCase())
+  );
+
+  const visibleSectors = showAllSectors ? filteredSectors : filteredSectors.slice(0, 10);
+
+  function toggleSector(name: string) {
+    setSelectedSectors((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  // Note: Select-all / clear CTAs intentionally removed per design.
+
   return (
     <div className="flex flex-col h-full">
-      {/* Scan in dropdown */}
-      <div className="mb-4">
-        <label className="text-xs font-medium text-muted-foreground block mb-1">Scan in</label>
-        <select
-          value={universe}
-          onChange={(e) => onUniverseChange(e.target.value)}
-          className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="nifty50">Nifty 50 Stocks</option>
-          <option value="nifty500">Nifty 500 Stocks</option>
-        </select>
-      </div>
+      <div className="flex-1 overflow-y-auto bg-background">
+        <Accordion type="multiple" className="w-full">
+          <AccordionItem value="universe">
+            <div className="px-4">
+              <AccordionTrigger className="py-3 text-foreground">
+                Stock Universe
+              </AccordionTrigger>
+              <AccordionContent className="px-0">
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Input
+                      placeholder="search"
+                      className="h-9 pr-9"
+                      readOnly
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      <Search size={16} />
+                    </div>
+                  </div>
 
-      {/* Conditions list */}
-      {conditions.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
-            <Search size={20} className="text-primary/50" />
-          </div>
-          <p className="text-sm text-muted-foreground mb-6">
-            Add conditions to scan for stocks matching your criteria
-          </p>
-        </div>
-      ) : (
-        <div className="flex-1 overflow-y-auto space-y-0 mb-4">
-          {conditions.map((row, idx) => (
-            <div key={row.id}>
-              {idx > 0 && (
-                <div className="flex items-center justify-center my-3">
-                  <select
-                    value={row.connector}
-                    onChange={(e) =>
-                      updateRow(row.id, { connector: e.target.value as "AND" | "OR" })
-                    }
-                    className="h-7 rounded-md border border-input bg-background px-3 text-xs font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <option value="AND">AND</option>
-                    <option value="OR">OR</option>
-                  </select>
+                  <div className="space-y-2">
+                    {[
+                      { id: "nifty50", label: "Nifty 50 Stocks" },
+                      { id: "nifty500", label: "Nifty 500 Stocks" },
+                    ].map((u) => (
+                      <label
+                        key={u.id}
+                        className="flex items-center justify-between gap-3 text-sm text-foreground cursor-pointer select-none"
+                      >
+                        <span className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="universe"
+                            checked={universe === u.id}
+                            onChange={() => onUniverseChange(u.id)}
+                            className="h-4 w-4 accent-primary"
+                          />
+                          <span className="text-muted-foreground">{u.label}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              )}
-
-              <SimpleConditionForm
-                condition={row}
-                index={idx}
-                onChange={(patch) => updateRow(row.id, patch)}
-                onDelete={() => deleteRow(row.id)}
-                canDelete={true}
-                onIndicatorClick={(side) => onOpenSidebar({ id: row.id, side })}
-              />
+              </AccordionContent>
             </div>
-          ))}
-        </div>
-      )}
+          </AccordionItem>
 
+          <AccordionItem value="sector">
+            <div className="px-4">
+              <AccordionTrigger className="py-3 text-foreground">
+                Sector
+              </AccordionTrigger>
+              <AccordionContent className="px-0">
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Input
+                      value={sectorQuery}
+                      onChange={(e) => setSectorQuery(e.target.value)}
+                      placeholder="search"
+                      className="h-9 pr-9"
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      <Search size={16} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {visibleSectors.map((s) => {
+                      const checked = selectedSectors.has(s.name);
+                      return (
+                        <label
+                          key={s.name}
+                          className="flex items-center justify-between gap-3 text-sm text-foreground cursor-pointer select-none"
+                        >
+                          <span className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleSector(s.name)}
+                              className="h-4 w-4 accent-primary"
+                            />
+                            <span className="text-muted-foreground">{s.name}</span>
+                          </span>
+                          <span className="text-muted-foreground">({s.count})</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {filteredSectors.length > 10 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllSectors((v) => !v)}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      {showAllSectors ? "Show less" : "Show more"}
+                    </button>
+                  )}
+                </div>
+              </AccordionContent>
+            </div>
+          </AccordionItem>
+
+          {conditions.map((row, idx) => {
+            const ind = row.leftIndicatorId ? getIndicator(row.leftIndicatorId) : null;
+            const title = ind?.name ?? "Select Indicator";
+            return (
+              <AccordionItem key={row.id} value={row.id}>
+                <div className="px-4">
+                  <AccordionTrigger className="py-3 text-foreground">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold">{title}</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-0">
+                    <div className="pt-1">
+                      <SimpleConditionForm
+                        condition={row}
+                        index={idx}
+                        onChange={(patch) => updateRow(row.id, patch)}
+                        onDelete={() => deleteRow(row.id)}
+                        canDelete={true}
+                        onIndicatorClick={(side) => onOpenSidebar({ id: row.id, side })}
+                        variant="accordion"
+                      />
+                    </div>
+                  </AccordionContent>
+                </div>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+
+        {conditions.length === 0 && (
+          <div className="px-4 py-10 text-center">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+              <Search size={20} className="text-primary/50" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Add filters to scan for stocks matching your criteria
+            </p>
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="mt-4 text-xs font-medium text-foreground border border-border rounded-md px-3 py-1.5 hover:bg-muted"
+            >
+              Reset all
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1571,8 +1967,8 @@ function SimpleBuilderView({
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export function CustomScannerPage() {
-  const [activeTab, setActiveTab] = useState<"standard" | "advanced" | "ai" | "settings">("standard");
-  const uiMode = activeTab === "advanced" ? "classic" as const : "simple" as const;
+  const [activeTab, setActiveTab] = useState<"standard" | "custom">("standard");
+  const uiMode = "simple" as const;
   const [query, setQuery] = useState<QueryState>({
     name: "",
     universe: "nifty50",
@@ -1587,11 +1983,6 @@ export function CustomScannerPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [sortBy, setSortBy] = useState<"close" | "change1d" | "volume">("change1d");
   const [sortDesc, setSortDesc] = useState(true);
-
-  // Saved screeners
-  const [savedScreeners, setSavedScreeners] = useState<SavedScreener[]>([]);
-  const [selectedScreenerId, setSelectedScreenerId] = useState<string | null>(null);
-  const [isSavingScreener, setIsSavingScreener] = useState(false);
 
   // Data refresh state
   // Sidebar state (lifted to page level so it renders outside the scroll area)
@@ -1654,21 +2045,21 @@ export function CustomScannerPage() {
     sidebarTarget !== "new" && typeof sidebarTarget === "object" && sidebarTarget.side === "right";
 
   const [dynamicColumns, setDynamicColumns] = useState<IndicatorColumn[]>([]);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshProgress, setRefreshProgress] = useState<PipelineProgress | null>(null);
+  const [_isRefreshing, setIsRefreshing] = useState(false);
+  const [_refreshProgress, setRefreshProgress] = useState<PipelineProgress | null>(null);
   const [freshness, setFreshness] = useState<{ daily: string | null; intraday15m: string | null; monthly: string | null }>({
     daily: null,
     intraday15m: null,
     monthly: null,
   });
 
-  // Token state
-  const [tokenStatus, setTokenStatus] = useState<{ isSet: boolean; lastUpdated: string | null; maskedToken: string | null }>({
+  // Token state (used when Settings tab is re-enabled)
+  const [_tokenStatus, setTokenStatus] = useState<{ isSet: boolean; lastUpdated: string | null; maskedToken: string | null }>({
     isSet: false, lastUpdated: null, maskedToken: null,
   });
   const [tokenInput, setTokenInput] = useState("");
-  const [tokenSaving, setTokenSaving] = useState(false);
-  const [tokenSaveError, setTokenSaveError] = useState<string | null>(null);
+  const [_tokenSaving, setTokenSaving] = useState(false);
+  const [_tokenSaveError, setTokenSaveError] = useState<string | null>(null);
 
   // Load token + data freshness on mount
   useEffect(() => {
@@ -1677,69 +2068,7 @@ export function CustomScannerPage() {
     getDataFreshness().then(setFreshness).catch(() => {});
   }, []);
 
-  // Load saved screeners list on mount
-  useEffect(() => {
-    listSavedScreeners().then(setSavedScreeners).catch(() => {});
-  }, []);
-
-  async function handleLoadScreener(id: string) {
-    const saved = await getSavedScreener(id);
-    if (!saved) return;
-    setQuery({ ...saved.query, description: saved.description ?? saved.query.description ?? "" });
-    setSimpleConditions(queryToSimple(saved.query));
-    setSelectedScreenerId(id);
-    const cached = getCachedScanResult(id);
-    if (cached?.results?.length != null) {
-      setResults(cached.results);
-      setHasRun(true);
-      setLastScannedAt(cached.scannedAt);
-      setDynamicColumns(extractIndicatorColumns(saved.query));
-    } else {
-      setResults([]);
-      setHasRun(false);
-      setLastScannedAt(null);
-      setDynamicColumns([]);
-    }
-  }
-
-  async function handleSaveScreener() {
-    const q = uiMode === "simple" ? simpleToQuery(query.name, simpleConditions, query.universe, query.description ?? "") : query;
-    const nameToSave = q.name.trim() || "Unnamed screener";
-    setIsSavingScreener(true);
-    try {
-      if (selectedScreenerId) {
-        const ok = await updateSavedScreener(selectedScreenerId, { ...q, name: nameToSave });
-        if (ok) setQuery((prev) => ({ ...prev, name: nameToSave }));
-      } else {
-        const newId = await createSavedScreener({ ...q, name: nameToSave });
-        if (newId) {
-          setSelectedScreenerId(newId);
-          setQuery((prev) => ({ ...prev, name: nameToSave }));
-        }
-      }
-      const list = await listSavedScreeners();
-      setSavedScreeners(list);
-    } finally {
-      setIsSavingScreener(false);
-    }
-  }
-
-  async function handleDeleteScreener() {
-    if (!selectedScreenerId) return;
-    const id = selectedScreenerId;
-    const ok = await deleteSavedScreener(id);
-    if (ok) {
-      clearCachedScanResult(id);
-      setSelectedScreenerId(null);
-      const initial = { name: "", universe: "nifty50" as const, groups: [createGroup("AND", "1d")], description: "" };
-      setQuery(initial);
-      setSimpleConditions(queryToSimple(initial));
-      const list = await listSavedScreeners();
-      setSavedScreeners(list);
-    }
-  }
-
-  async function handleSaveToken() {
+  async function _handleSaveToken() {
     if (!tokenInput.trim()) return;
     setTokenSaving(true);
     setTokenSaveError(null);
@@ -1774,33 +2103,19 @@ export function CustomScannerPage() {
       const matches = await runCustomScan(q, setScanProgress);
       setResults(matches);
       setLastScannedAt(new Date().toISOString());
-      if (selectedScreenerId) setCachedScanResult(selectedScreenerId, matches);
     } catch (err) {
       setScanProgress({ phase: "error", message: String(err) });
     } finally {
       setIsScanning(false);
     }
-  }, [query, simpleConditions, uiMode, selectedScreenerId]);
+  }, [query, simpleConditions, uiMode]);
 
-  function handleTabSwitch(tab: "standard" | "advanced" | "ai" | "settings") {
-    if (tab === "ai") return;
-    const prevMode = activeTab === "advanced" ? "classic" : "simple";
-    const nextMode = tab === "advanced" ? "classic" : "simple";
-    if (prevMode !== nextMode) {
-      if (nextMode === "simple") {
-        setSimpleConditions(queryToSimple(query));
-      } else {
-        const converted = simpleToQuery(query.name, simpleConditions, query.universe, query.description ?? "");
-        if (converted.groups.length === 0) {
-          converted.groups = [createGroup("AND", "1d")];
-        }
-        setQuery(converted);
-      }
-    }
+  function handleTabSwitch(tab: "standard" | "custom") {
+    if (tab === "custom") return; // Custom is coming soon — keep on Standard
     setActiveTab(tab);
   }
 
-  const handleRefreshData = useCallback(async (phase: "1d" | "15m" | "1M" | "all") => {
+  const _handleRefreshData = useCallback(async (phase: "1d" | "15m" | "1M" | "all") => {
     setIsRefreshing(true);
     setRefreshProgress(null);
     try {
@@ -1822,6 +2137,11 @@ export function CustomScannerPage() {
       setRefreshProgress(null);
     }
   }, []);
+
+  if (import.meta.env.DEV) {
+    void _handleSaveToken;
+    void _handleRefreshData;
+  }
 
   const sortedResults = [...results].sort((a, b) => {
     const mul = sortDesc ? -1 : 1;
@@ -1867,9 +2187,7 @@ export function CustomScannerPage() {
         <div className="flex border-b border-border bg-background">
           {([
             { id: "standard" as const, label: "Standard" },
-            // { id: "advanced" as const, label: "Advanced" },
-            { id: "ai" as const, label: "AI", badge: "Soon" },
-            { id: "settings" as const, label: "Settings", icon: Settings },
+            { id: "custom" as const, label: "Custom", badge: "Coming Soon" },
           ]).map((tab) => (
             <button
               key={tab.id}
@@ -1879,10 +2197,9 @@ export function CustomScannerPage() {
                 activeTab === tab.id
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground",
-                tab.id === "ai" && "cursor-default opacity-60"
+                tab.id === "custom" && "cursor-default opacity-60"
               )}
             >
-              {tab.icon && <tab.icon size={13} />}
               {tab.label}
               {tab.badge && (
                 <span className="text-[8px] font-bold bg-primary/10 text-primary px-1 py-px rounded uppercase leading-none">
@@ -1895,211 +2212,16 @@ export function CustomScannerPage() {
 
         {/* Scrollable: Header + Builder content (no sticky header) */}
         <div className="flex-1 overflow-y-auto">
-          {/* Header */}
-          <div className="px-4 pt-3 pb-2 space-y-2">
-            <div className="flex items-center gap-2">
-              <select
-                value={selectedScreenerId ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "") {
-                    setSelectedScreenerId(null);
-                    const initial = { name: "", universe: "nifty50" as const, groups: [createGroup("AND", "1d")], description: "" };
-                    setQuery(initial);
-                    setSimpleConditions(queryToSimple(initial));
-                    setResults([]);
-                    setHasRun(false);
-                    setLastScannedAt(null);
-                    setDynamicColumns([]);
-                  } else {
-                    handleLoadScreener(v);
-                  }
-                }}
-                className="h-9 flex-1 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">— New screener —</option>
-                {savedScreeners.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              {selectedScreenerId && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={handleDeleteScreener}
-                  title="Delete this screener"
-                >
-                  <Trash2 size={14} />
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Name your screener..."
-                value={query.name}
-                onChange={(e) =>
-                  setQuery((q) => ({ ...q, name: e.target.value }))
-                }
-                className="h-9 text-sm font-medium flex-1"
-              />
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleSaveScreener}
-                disabled={isSavingScreener}
-                className="h-9 gap-1.5 shrink-0"
-              >
-                {isSavingScreener ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                Save
-              </Button>
-            </div>
-            <textarea
-              placeholder="Description (optional)"
-              value={query.description ?? ""}
-              onChange={(e) => setQuery((q) => ({ ...q, description: e.target.value }))}
-              rows={2}
-              className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-            />
-          </div>
-
         {/* Builder area */}
-        <div className="p-4 pt-0 space-y-3">
-          {activeTab === "settings" ? (
-            <div className="space-y-5">
-              {/* Upstox Token */}
-              <div>
-                <h3 className="text-sm font-semibold text-foreground mb-2">Upstox Access Token</h3>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Required for fetching candle data. Token expires daily — paste a fresh one here.
-                </p>
-                {tokenStatus.isSet && (
-                  <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2 mb-2">
-                    <span className="text-xs font-mono text-muted-foreground">{tokenStatus.maskedToken}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {tokenStatus.lastUpdated ? `Updated ${timeAgo(tokenStatus.lastUpdated)}` : ""}
-                    </span>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <Input
-                    type="password"
-                    value={tokenInput}
-                    onChange={(e) => {
-                      setTokenInput(e.target.value);
-                      setTokenSaveError(null);
-                    }}
-                    placeholder={tokenStatus.isSet ? "Paste new token to update..." : "Paste your Upstox access token..."}
-                    className="h-9 text-sm flex-1 font-mono"
-                  />
-                  <Button
-                    size="sm"
-                    onClick={handleSaveToken}
-                    disabled={!tokenInput.trim() || tokenSaving}
-                    className="h-9 px-4"
-                  >
-                    {tokenSaving ? <Loader2 size={14} className="animate-spin" /> : "Save"}
-                  </Button>
-                </div>
-                {tokenSaveError && (
-                  <p className="text-[10px] text-red-600 mt-1.5">
-                    {tokenSaveError}
-                  </p>
-                )}
-                {!tokenStatus.isSet && !tokenSaveError && (
-                  <p className="text-[10px] text-amber-600 mt-1.5">
-                    No token set. Data refresh will fail until a valid token is saved.
-                  </p>
-                )}
-              </div>
-
-              <div className="border-t border-border pt-4">
-                <h3 className="text-sm font-semibold text-foreground">Data Management</h3>
-              <p className="text-xs text-muted-foreground">
-                Refresh candle data from Upstox. Only new candles since the last refresh are fetched.
-              </p>
-              <div className="space-y-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleRefreshData("1d")}
-                  disabled={isRefreshing}
-                  className="w-full gap-2 justify-start"
-                >
-                  {isRefreshing && refreshProgress?.phase === "1d" ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <RefreshCw size={14} />
-                  )}
-                  Refresh Daily (1D) Candles
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleRefreshData("15m")}
-                  disabled={isRefreshing}
-                  className="w-full gap-2 justify-start"
-                >
-                  {isRefreshing && refreshProgress?.phase === "15m" ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <RefreshCw size={14} />
-                  )}
-                  Refresh 15-Minute Candles
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleRefreshData("1M")}
-                  disabled={isRefreshing}
-                  className="w-full gap-2 justify-start"
-                >
-                  {isRefreshing && refreshProgress?.phase === "1M" ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <RefreshCw size={14} />
-                  )}
-                  Refresh 1M Candles
-                </Button>
-              </div>
-              {isRefreshing && refreshProgress && (
-                <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-3">
-                  {refreshProgress.phase.toUpperCase()}: {refreshProgress.current}/{refreshProgress.total} stocks
-                  {refreshProgress.newCandles != null && ` · ${refreshProgress.newCandles} new candles`}
-                  {refreshProgress.errors > 0 && ` · ${refreshProgress.errors} errors`}
-                  {refreshProgress.symbol && ` — ${refreshProgress.symbol}`}
-                </div>
-              )}
-              <div className="pt-2 border-t border-border">
-                <h3 className="text-sm font-semibold text-foreground mb-2">Data Freshness</h3>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <div className="flex justify-between">
-                    <span>Daily candles</span>
-                    <span className="font-medium text-foreground">{freshness.daily ? timeAgo(freshness.daily) : "not loaded"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>15-min candles</span>
-                    <span className="font-medium text-foreground">{freshness.intraday15m ? timeAgo(freshness.intraday15m) : "not loaded"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Monthly (1M) candles</span>
-                    <span className="font-medium text-foreground">{freshness.monthly ? timeAgo(freshness.monthly) : "not loaded"}</span>
-                  </div>
-                </div>
-              </div>
-              </div>
-            </div>
-          ) : activeTab === "ai" ? (
+        <div className="pt-0 space-y-3">
+          {activeTab === "custom" ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center px-8 py-16">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
                 <Sparkles size={24} className="text-primary/50" />
               </div>
-              <h3 className="font-semibold text-foreground mb-1">AI Scanner</h3>
+              <h3 className="font-semibold text-foreground mb-1">Custom Scanner</h3>
               <p className="text-sm text-muted-foreground">
-                Describe your strategy in plain English and let AI build the conditions for you. Coming soon.
+                Build fully custom screeners with advanced logic. Coming soon.
               </p>
             </div>
           ) : uiMode === "simple" ? (
@@ -2477,31 +2599,38 @@ export function CustomScannerPage() {
                   customItems={
                     selectedGroup === "Futures & Options"
                       ? FUTURES_OPTIONS_ITEMS.map((label) => ({
+                          id: mockIndicatorId("fno", label),
                           label,
-                          locked: true,
+                          locked: false,
                         }))
                       : selectedGroup === "Profitability"
                         ? PROFITABILITY_ITEMS.map((label) => ({
+                            id: mockIndicatorId("profitability", label),
                             label,
-                            locked: true,
+                            locked: false,
                           }))
                         : selectedGroup === "Cash Flow"
                           ? CASH_FLOW_ITEMS.map((label) => ({
+                              id: mockIndicatorId("cashflow", label),
                               label,
-                              locked: true,
+                              locked: false,
                             }))
                           : selectedGroup === "Valuation"
                             ? VALUATION_ITEMS.map((label) => ({
+                                id: mockIndicatorId("valuation", label),
                                 label,
-                                locked: true,
+                                locked: false,
                               }))
+                            : selectedGroup === "Financial Ratios"
+                              ? FINANCIAL_RATIOS_ITEMS.map((label) => ({
+                                  id: mockIndicatorId("financial", label),
+                                  label,
+                                  locked: false,
+                                }))
                             : undefined
                   }
                   disableSelection={
-                    selectedGroup === "Futures & Options" ||
-                    selectedGroup === "Profitability" ||
-                    selectedGroup === "Cash Flow" ||
-                    selectedGroup === "Valuation"
+                    false
                   }
                 />
               </div>
