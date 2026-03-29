@@ -2127,6 +2127,10 @@ export function CustomScannerPage() {
 
   // Mobile filter sheet
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  // Mobile per-condition edit sheet
+  const [mobileConditionEditId, setMobileConditionEditId] = useState<string | null>(null);
+  // Which view inside the mobile condition modal: "form" (default) or "compareWith"
+  const [mobileConditionView, setMobileConditionView] = useState<"form" | "compareWith">("form");
 
   const [headerNotice, setHeaderNotice] = useState<string | null>(null);
   const headerNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2602,7 +2606,10 @@ export function CustomScannerPage() {
           {/* Filter icon chip — always first */}
           <button
             type="button"
-            onClick={() => setMobileFilterOpen(true)}
+            onClick={() => {
+              if (activeTab === "standard") handleOpenSidebar("new");
+              setMobileFilterOpen(true);
+            }}
             className={cn(
               "shrink-0 flex items-center gap-1.5 h-9 px-3.5 rounded-full border text-sm font-medium transition-colors",
               mobileFilterChips.length > 0
@@ -2618,14 +2625,20 @@ export function CustomScannerPage() {
             )}
           </button>
 
-          {/* Active condition chips */}
+          {/* Active condition chips — tap to open per-condition edit sheet */}
           {mobileFilterChips.map((chip) => (
             <button
               key={chip.id}
               type="button"
               onClick={() => {
-                chip.onPress();
-                setMobileFilterOpen(true);
+                // Standard tab: open focused per-condition sheet
+                // Custom tab: open the full builder (no per-line targeting)
+                if (activeTab === "standard") {
+                  setMobileConditionEditId(chip.id);
+                  setMobileConditionView("form");
+                } else {
+                  setMobileFilterOpen(true);
+                }
               }}
               className="shrink-0 h-9 px-3.5 rounded-full bg-muted border border-border text-sm font-medium text-foreground whitespace-nowrap hover:bg-muted/70 active:bg-muted/50 transition-colors"
             >
@@ -3465,9 +3478,120 @@ export function CustomScannerPage() {
                 });
               }}
             />
+
           </div>
         </>
       )}
+
+      {/* Per-condition mobile full-screen modal */}
+      {mobileConditionEditId && (() => {
+        const cond = simpleConditions.find((c) => c.id === mobileConditionEditId);
+        if (!cond) return null;
+        const ind = getIndicator(cond.leftIndicatorId);
+        if (!ind) return null;
+        function patchCond(patch: Partial<SimpleConditionRow>) {
+          setSimpleConditions((prev) =>
+            prev.map((c) => (c.id === mobileConditionEditId ? { ...c, ...patch } : c))
+          );
+        }
+        function deleteCond() {
+          setSimpleConditions((prev) => prev.filter((c) => c.id !== mobileConditionEditId));
+          setMobileConditionEditId(null);
+        }
+        const condIndex = simpleConditions.findIndex((c) => c.id === mobileConditionEditId);
+
+        return (
+          <>
+            {/* Full-screen edit condition modal */}
+            <div className="md:hidden fixed inset-0 z-[70] bg-background flex flex-col">
+              {/* Header — always "Edit Condition", just X to close */}
+              <div className="px-4 py-3 flex items-center gap-3 border-b border-border shrink-0">
+                <button
+                  onClick={() => setMobileConditionEditId(null)}
+                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X size={15} />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-base truncate">{ind.name}</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Edit condition</p>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <SimpleConditionForm
+                  condition={cond}
+                  index={condIndex >= 0 ? condIndex : 0}
+                  onChange={patchCond}
+                  onDelete={deleteCond}
+                  canDelete={true}
+                  variant="accordion"
+                  onIndicatorClick={(side) => {
+                    setMobileConditionEditId(null);
+                    handleOpenSidebar({ id: cond.id, side });
+                    setMobileFilterOpen(true);
+                  }}
+                  onRequestCompareWith={() => setMobileConditionView("compareWith")}
+                />
+              </div>
+
+              {/* Footer */}
+              <div className="px-4 pt-3 pb-8 flex gap-3 border-t border-border shrink-0">
+                <button
+                  type="button"
+                  onClick={deleteCond}
+                  className="flex-1 h-11 rounded-xl border border-red-300 text-red-500 text-sm font-medium hover:bg-red-50 transition-colors"
+                >
+                  Delete filter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileConditionEditId(null)}
+                  className="flex-[2] h-11 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+
+            {/* Compare-with bottom sheet — slides up ON TOP of the form modal */}
+            {mobileConditionView === "compareWith" && (
+              <>
+                {/* Dim backdrop over the form modal */}
+                <div
+                  className="md:hidden fixed inset-0 z-[71] bg-black/40"
+                  onClick={() => setMobileConditionView("form")}
+                />
+                {/* Sheet */}
+                <div className="md:hidden fixed bottom-0 left-0 right-0 z-[72] bg-background rounded-t-2xl shadow-2xl flex flex-col max-h-[85vh]">
+                  {/* Drag handle */}
+                  <div className="flex justify-center pt-3 pb-1 shrink-0">
+                    <div className="w-9 h-1 rounded-full bg-muted-foreground/30" />
+                  </div>
+                  {/* CompareWithSidePanel has its own "Compare with" header + X — render it directly */}
+                  <div className="flex-1 overflow-y-auto">
+                    <CompareWithSidePanel
+                      leftIndicatorId={cond.leftIndicatorId}
+                      initialRightValue={cond.rightType === "value" ? cond.rightValue : ""}
+                      onClose={() => setMobileConditionView("form")}
+                      onPickValue={(v) => {
+                        patchCond({ rightType: "value", rightIndicatorId: "", rightParams: {}, rightValue: v });
+                        setMobileConditionView("form");
+                      }}
+                      onPickIndicator={(id) => {
+                        const picked = getIndicator(id);
+                        patchCond({ rightType: "indicator", rightIndicatorId: id, rightParams: picked ? defaultParams(picked) : {}, rightValue: "" });
+                        setMobileConditionView("form");
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }
