@@ -19,6 +19,8 @@ export interface ConditionState {
   rightIndicatorId: string;
   rightParams: Record<string, number | string>;
   rightMultiplier: number;
+  /** For `greater_than` / `less_than`: require left vs right by this % margin (0 = off). */
+  comparisonMarginPercent: number;
   rightValue2: string;
   hasTimeModifier: boolean;
   timeModifierMode: "within_last" | "exactly_ago" | "all_of_last";

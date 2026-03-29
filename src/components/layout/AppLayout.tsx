@@ -155,22 +155,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border bg-muted/30 py-8 mt-auto">
-        <div className="max-w-screen-xl mx-auto px-4 sm:px-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-                <TrendingUp className="w-3.5 h-3.5 text-white" />
+      {/* Footer — hidden on DIY screener for full-height builder */}
+      {!location.pathname.startsWith("/diy") && (
+        <footer className="border-t border-border bg-muted/30 py-8 mt-auto">
+          <div className="max-w-screen-xl mx-auto px-4 sm:px-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
+                  <TrendingUp className="w-3.5 h-3.5 text-white" />
+                </div>
+                <span className="font-semibold text-sm text-foreground">Upstox Scanners</span>
               </div>
-              <span className="font-semibold text-sm text-foreground">Upstox Scanners</span>
+              <p className="text-xs text-muted-foreground">
+                For educational purposes only. Not investment advice. © 2026 Upstox
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              For educational purposes only. Not investment advice. © 2026 Upstox
-            </p>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }

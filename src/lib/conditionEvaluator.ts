@@ -21,6 +21,13 @@ interface GroupEvalResult {
 /**
  * Evaluate a single comparison operator between two values at a specific bar index.
  */
+function adjustRightForMargin(op: string, right: number, marginPercent: number): number {
+  if (!marginPercent || Number.isNaN(marginPercent)) return right;
+  if (op === "greater_than") return right * (1 + marginPercent / 100);
+  if (op === "less_than") return right * (1 - marginPercent / 100);
+  return right;
+}
+
 function evalOperator(
   op: string,
   leftVals: number[],
@@ -28,7 +35,8 @@ function evalOperator(
   rightScalar: number | null,
   multiplier: number,
   idx: number,
-  rightValue2: number | null
+  rightValue2: number | null,
+  marginPercent: number
 ): boolean {
   const left = leftVals[idx];
   if (Number.isNaN(left) || left === undefined) return false;
@@ -43,6 +51,8 @@ function evalOperator(
   } else {
     right = 0;
   }
+
+  right = adjustRightForMargin(op, right, marginPercent);
 
   switch (op) {
     case "greater_than":
@@ -111,6 +121,7 @@ function evalCondition(condition: ConditionState, data: OhlcvRow[]): boolean {
   const multiplier = condition.rightMultiplier || 1;
 
   const op = condition.operator;
+  const marginPercent = condition.comparisonMarginPercent ?? 0;
 
   if (op === "detected" || op === "is_increasing" || op === "is_decreasing") {
     // No right operand needed
@@ -141,7 +152,16 @@ function evalCondition(condition: ConditionState, data: OhlcvRow[]): boolean {
 
   // No time modifier → evaluate at current (last) bar
   if (!condition.hasTimeModifier) {
-    return evalOperator(op, leftVals, rightVals, rightScalar, multiplier, lastIdx, rightValue2);
+    return evalOperator(
+      op,
+      leftVals,
+      rightVals,
+      rightScalar,
+      multiplier,
+      lastIdx,
+      rightValue2,
+      marginPercent
+    );
   }
 
   const bars = condition.timeModifierBars || 5;
@@ -150,14 +170,34 @@ function evalCondition(condition: ConditionState, data: OhlcvRow[]): boolean {
   if (mode === "exactly_ago") {
     const idx = lastIdx - bars;
     if (idx < 0) return false;
-    return evalOperator(op, leftVals, rightVals, rightScalar, multiplier, idx, rightValue2);
+    return evalOperator(
+      op,
+      leftVals,
+      rightVals,
+      rightScalar,
+      multiplier,
+      idx,
+      rightValue2,
+      marginPercent
+    );
   }
 
   if (mode === "all_of_last") {
     for (let b = 0; b < bars; b++) {
       const idx = lastIdx - b;
       if (idx < 0) return false;
-      if (!evalOperator(op, leftVals, rightVals, rightScalar, multiplier, idx, rightValue2)) {
+      if (
+        !evalOperator(
+          op,
+          leftVals,
+          rightVals,
+          rightScalar,
+          multiplier,
+          idx,
+          rightValue2,
+          marginPercent
+        )
+      ) {
         return false;
       }
     }
@@ -168,7 +208,18 @@ function evalCondition(condition: ConditionState, data: OhlcvRow[]): boolean {
   for (let b = 0; b < bars; b++) {
     const idx = lastIdx - b;
     if (idx < 0) break;
-    if (evalOperator(op, leftVals, rightVals, rightScalar, multiplier, idx, rightValue2)) {
+    if (
+      evalOperator(
+        op,
+        leftVals,
+        rightVals,
+        rightScalar,
+        multiplier,
+        idx,
+        rightValue2,
+        marginPercent
+      )
+    ) {
       return true;
     }
   }

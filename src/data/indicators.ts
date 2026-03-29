@@ -1,3 +1,5 @@
+import { DIY_MOCK_FUNDAMENTAL_NAMESPACES } from "@/data/diyMockCatalog";
+
 export type IndicatorCategory =
   | "price"
   | "moving_averages"
@@ -9,7 +11,8 @@ export type IndicatorCategory =
   | "pivot"
   | "setups"
   | "divergence"
-  | "candlestick";
+  | "candlestick"
+  | "fundamental";
 
 export type OutputType = "numeric" | "pattern";
 
@@ -54,6 +57,7 @@ export const CATEGORIES: { key: IndicatorCategory; label: string }[] = [
   { key: "setups", label: "Setups" },
   { key: "divergence", label: "Divergence Patterns" },
   { key: "candlestick", label: "Candlestick Patterns" },
+  { key: "fundamental", label: "Fundamental / Valuation" },
 ];
 
 // ─── Indicator Catalog ──────────────────────────────────────────────────────
@@ -474,6 +478,8 @@ export function getOperatorsForType(type: OutputType): OperatorDef[] {
 
 export function getIndicator(id: string): IndicatorDef | undefined {
   if (id.startsWith("mock:")) {
+    const parts = id.split(":");
+    const namespace = (parts[1] ?? "").toLowerCase();
     const raw = id.split(":").pop() ?? id;
     const words = raw
       .replace(/-/g, " ")
@@ -488,7 +494,7 @@ export function getIndicator(id: string): IndicatorDef | undefined {
     return {
       id,
       name: words.join(" "),
-      category: "price",
+      category: DIY_MOCK_FUNDAMENTAL_NAMESPACES.has(namespace) ? "fundamental" : "price",
       params: [],
       outputType: "numeric",
       isNew: true,
