@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import {
-  X, Plus, Play, Search, Loader2, Sparkles, Lock, ChevronDown, ChevronRight, Pencil, RotateCcw,
-  SlidersHorizontal, TrendingUp, TrendingDown, Share2, Save,
+  X, Plus, Search, Loader2, Sparkles, Lock, ChevronDown, ChevronRight, Pencil, RotateCcw,
+  SlidersHorizontal, TrendingUp, TrendingDown, Share2, Save, Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -57,7 +57,16 @@ const CONDITION_GROUPS = [
   "Futures & Options",
 ];
 
-import type { ConditionState, GroupState, QueryState, ScanResultRow, ScanProgress, IndicatorColumn } from "@/types/screener";
+import type {
+  ConditionState,
+  GroupState,
+  QueryState,
+  ScanResultRow,
+  ScanProgress,
+  IndicatorColumn,
+  ScreenerPreferences,
+} from "@/types/screener";
+import { DEFAULT_SCREENER_PREFERENCES } from "@/types/screener";
 import { runCustomScan, extractIndicatorColumns } from "@/lib/customScanRunner";
 import { loadTokenFromSupabase, saveTokenToSupabase, getTokenStatus } from "@/lib/upstoxTokenStore";
 import { refreshDailyCandles, refresh15mCandles, refreshMonthlyCandles, getDataFreshness, getInstrumentList, type PipelineProgress } from "@/lib/scannerDataPipeline";
@@ -68,8 +77,11 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { Field } from "@/components/ui/field";
 import { CompareWithSidePanel } from "@/components/scanner/CompareWithSidePanel";
+import { SaveScreenerDialog } from "@/components/screener/SaveScreenerDialog";
+import { createSavedScreener, updateSavedScreener } from "@/lib/savedScreeners";
 
 const DIY_SCREENER_STORAGE_KEY = "upstox:diy-screener:v1";
+const DEFAULT_SCREENER_NAME = "Untitled screener";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -899,6 +911,7 @@ function isPersistedDiyV1(x: unknown): x is {
   customNlInput: string;
   customUniverse: string;
   activeTab: "standard" | "custom";
+  savedScreenerId?: string;
 } {
   if (!x || typeof x !== "object") return false;
   const o = x as Record<string, unknown>;
@@ -922,12 +935,14 @@ function simpleToQuery(
   name: string,
   conditions: SimpleConditionRow[],
   universe: string = "nifty50",
-  description: string = ""
+  description: string = "",
+  preferences?: QueryState["preferences"]
 ): QueryState {
   return {
     name,
     universe,
     description,
+    preferences,
     groups: conditions.map((c) => ({
       id: c.id + "_g",
       logic: "AND" as const,
@@ -1270,11 +1285,11 @@ function SimpleConditionForm({
 
   const leftInd = condition.leftIndicatorId ? getIndicator(condition.leftIndicatorId) : null;
   const rightInd = condition.rightIndicatorId ? getIndicator(condition.rightIndicatorId) : null;
-  const showChartTimeframe =
-    indicatorUsesChartTimeframe(condition.leftIndicatorId) ||
-    (condition.rightType === "indicator" &&
-      !!condition.rightIndicatorId &&
-      indicatorUsesChartTimeframe(condition.rightIndicatorId));
+  const leftUsesChartTf = indicatorUsesChartTimeframe(condition.leftIndicatorId);
+  const rightUsesChartTf =
+    condition.rightType === "indicator" &&
+    !!condition.rightIndicatorId &&
+    indicatorUsesChartTimeframe(condition.rightIndicatorId);
   const opDef = condition.operator ? OPERATORS.find((o) => o.id === condition.operator) : undefined;
   const validOps = leftInd ? getOperatorsForType(leftInd.outputType) : [];
   const needsRight = opDef?.needsRight ?? false;
@@ -1374,6 +1389,78 @@ function SimpleConditionForm({
     setAdvancedOpen(true);
   }
 
+  /**
+   * Fields use flex-1; clear (X) lines up with header collapse control.
+   * Card: collapse is `w-7` — center X in `w-7`.
+   * Accordion: chevron is `w-4` at the row’s right edge — right-align in `w-4` + nudge so X centers on the chevron; slight `translate-y` to match Field input vs `py-3` header.
+   */
+  function FormRowWithHeaderGutter({
+    children,
+    trailingAction,
+  }: {
+    children: ReactNode;
+    trailingAction?: ReactNode;
+  }) {
+    const collapseColumnCard = (
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center self-center">
+        {trailingAction}
+      </div>
+    );
+
+    const collapseColumnAccordion = (
+      <div className="flex min-w-4 w-4 shrink-0 items-center justify-end overflow-visible self-center">
+        {trailingAction ? (
+          <div className="translate-x-1.5 translate-y-px">{trailingAction}</div>
+        ) : null}
+      </div>
+    );
+
+    if (variant === "card") {
+      return (
+        <div className="flex w-full min-w-0 items-center gap-1.5">
+          <div className="min-w-0 flex-1">{children}</div>
+          {collapseColumnCard}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex w-full min-w-0 items-center gap-2">
+        <div className="min-w-0 flex-1">{children}</div>
+        {collapseColumnAccordion}
+      </div>
+    );
+  }
+
+  function clearLeftIndicator() {
+    onChange({
+      leftIndicatorId: "",
+      leftParams: {},
+      operator: "" as OperatorId,
+      rightType: "indicator",
+      rightIndicatorId: "",
+      rightParams: {},
+      rightValue: "",
+      rightValue2: "",
+      comparisonMarginPercent: 0,
+      hasTimeModifier: false,
+      timeModifierMode: "within_last",
+      timeModifierBars: 5,
+    });
+  }
+
+  function clearRightIndicatorOperand() {
+    onChange({
+      rightType: "indicator",
+      rightIndicatorId: "",
+      rightParams: {},
+      rightValue: "",
+    });
+  }
+
+  const clearIconButtonClass =
+    "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500";
+
   return (
     <>
     <div className={cn(
@@ -1414,130 +1501,149 @@ function SimpleConditionForm({
 
       {(variant !== "card" || !collapsed) && (
         <div className={cn(variant === "card" ? "p-4 space-y-4" : "space-y-4")}>
-          <div className="grid grid-cols-12 gap-2 items-start w-full min-w-0">
-            {/* Indicator (left); timeframe only when bar-based left or right indicator */}
-            <div className={cn("min-w-0", showChartTimeframe ? "col-span-9" : "col-span-12")}>
-              <div className="flex items-stretch gap-2 min-w-0 flex-nowrap">
-                <Field
-                  label="Indicator"
-                  className={cn(
-                    "min-w-0 flex-1",
-                    condition.leftIndicatorId &&
-                      "border-muted bg-muted/40 [&:focus-within]:border-muted [&:focus-within]:ring-0"
-                  )}
-                  contentClassName="px-2 py-1"
+          <FormRowWithHeaderGutter
+            trailingAction={
+              condition.leftIndicatorId ? (
+                <button
+                  type="button"
+                  onClick={clearLeftIndicator}
+                  className={clearIconButtonClass}
+                  title="Clear indicator"
+                  aria-label="Clear indicator"
                 >
-                  {condition.leftIndicatorId ? (
-                    <div
-                      className="h-8 w-full flex items-center px-1 text-sm text-muted-foreground truncate cursor-not-allowed select-none"
-                      title={leftLabel()}
-                      aria-disabled="true"
-                    >
-                      {leftLabel()}
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onIndicatorClick("left")}
-                      className="h-8 w-full flex items-center justify-between rounded-md bg-transparent px-1 text-sm text-left text-muted-foreground hover:bg-accent/50 transition-colors"
-                    >
-                      <span className="truncate">Select indicator...</span>
-                      <span className="text-muted-foreground ml-1">›</span>
-                    </button>
-                  )}
-                </Field>
-                {leftInd && leftInd.params.length > 0 && (
-                  leftPreset ? (
-                    <Field label={leftPreset.label} className="w-20 shrink-0" contentClassName="px-2 py-1">
-                      <div className="relative">
-                        <select
-                          value={leftPreset.value}
-                          onChange={(e) => {
-                            const opt = leftPreset.options.find((o) => o.value === e.target.value);
-                            if (opt) onChange({ leftParams: opt.params });
-                          }}
-                          className="h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0"
-                        >
-                          {leftPreset.options.map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
-                        <SelectFieldChevron />
+                  <X className="h-4 w-4 shrink-0" strokeWidth={2} />
+                </button>
+              ) : undefined
+            }
+          >
+            <div className="grid grid-cols-12 gap-2 items-start w-full min-w-0">
+              {/* Indicator 1 + Length | Timeframe (9/3); Length w-24; Indicator min-w floor */}
+              <div className={cn("min-w-0", leftUsesChartTf ? "col-span-9" : "col-span-12")}>
+                <div className="flex items-stretch gap-2 min-w-0 flex-nowrap">
+                  <Field
+                    label="Indicator"
+                    className={cn(
+                      "max-w-full flex-1 min-w-[7.25rem]",
+                      condition.leftIndicatorId &&
+                        "border-muted bg-muted/40 [&:focus-within]:border-muted [&:focus-within]:ring-0"
+                    )}
+                    contentClassName="px-2 py-1"
+                  >
+                    {condition.leftIndicatorId ? (
+                      <div
+                        className="h-8 w-full flex items-center px-1 text-sm text-muted-foreground truncate cursor-not-allowed select-none"
+                        title={leftLabel()}
+                        aria-disabled="true"
+                      >
+                        {leftLabel()}
                       </div>
-                    </Field>
-                  ) : (
-                    <button
-                      onClick={() => setParamModal("left")}
-                      className="w-12 rounded-md border border-input bg-background flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
-                      title="Customize parameters"
-                    >
-                      <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <circle cx="3" cy="4" r="1.5" /><line x1="5" y1="4" x2="15" y2="4" />
-                        <circle cx="10" cy="8" r="1.5" /><line x1="1" y1="8" x2="8" y2="8" /><line x1="12" y1="8" x2="15" y2="8" />
-                        <circle cx="6" cy="12" r="1.5" /><line x1="1" y1="12" x2="4" y2="12" /><line x1="8" y1="12" x2="15" y2="12" />
-                      </svg>
-                    </button>
-                  )
-                )}
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onIndicatorClick("left")}
+                        className="h-8 w-full flex items-center justify-between rounded-md bg-transparent px-1 text-sm text-left text-muted-foreground hover:bg-accent/50 transition-colors"
+                      >
+                        <span className="truncate">Select indicator...</span>
+                        <span className="text-muted-foreground ml-1">›</span>
+                      </button>
+                    )}
+                  </Field>
+                  {leftInd && leftInd.params.length > 0 && (
+                    leftPreset ? (
+                      <Field label={leftPreset.label} className="w-24 shrink-0" contentClassName="px-2 py-1">
+                        <div className="relative">
+                          <select
+                            value={leftPreset.value}
+                            onChange={(e) => {
+                              const opt = leftPreset.options.find((o) => o.value === e.target.value);
+                              if (opt) onChange({ leftParams: opt.params });
+                            }}
+                            className="h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0"
+                          >
+                            {leftPreset.options.map((o) => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                          <SelectFieldChevron />
+                        </div>
+                      </Field>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setParamModal("left")}
+                        className="w-12 rounded-md border border-input bg-background flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
+                        title="Customize parameters"
+                      >
+                        <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <circle cx="3" cy="4" r="1.5" /><line x1="5" y1="4" x2="15" y2="4" />
+                          <circle cx="10" cy="8" r="1.5" /><line x1="1" y1="8" x2="8" y2="8" /><line x1="12" y1="8" x2="15" y2="8" />
+                          <circle cx="6" cy="12" r="1.5" /><line x1="1" y1="12" x2="4" y2="12" /><line x1="8" y1="12" x2="15" y2="12" />
+                        </svg>
+                      </button>
+                    )
+                  )}
+                </div>
               </div>
-            </div>
 
-            {showChartTimeframe && (
-              <div className="col-span-3 min-w-0">
-                <Field label="Timeframe" contentClassName="px-2 py-1">
+              {leftUsesChartTf && (
+                <div className="col-span-3 min-w-0">
+                  <Field label="Timeframe" contentClassName="px-2 py-1">
+                    <div className="relative">
+                      <select
+                        value={condition.timeframe}
+                        onChange={(e) => onChange({ timeframe: e.target.value })}
+                        className="h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0"
+                      >
+                        {SUPPORTED_TIMEFRAMES.map((t) => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+                      <SelectFieldChevron />
+                    </div>
+                  </Field>
+                </div>
+              )}
+            </div>
+          </FormRowWithHeaderGutter>
+
+          {/* Condition (operator) */}
+          {leftInd && (
+            <div className="space-y-2">
+              <FormRowWithHeaderGutter>
+                <Field label="Condition" contentClassName="px-2 py-1">
                   <div className="relative">
                     <select
-                      value={condition.timeframe}
-                      onChange={(e) => onChange({ timeframe: e.target.value })}
-                      className="h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0"
+                      value={condition.operator}
+                      onChange={(e) => {
+                        const opId = e.target.value as OperatorId;
+                        const incDec =
+                          opId === "is_increasing" ||
+                          opId === "is_decreasing";
+                        const isDetected = opId === "detected";
+                        const keepMargin =
+                          opId === "greater_than" || opId === "less_than";
+                        onChange({
+                          operator: opId || ("" as OperatorId),
+                          hasTimeModifier: incDec || isDetected,
+                          timeModifierBars: incDec || isDetected ? 1 : 5,
+                          ...(isDetected ? { timeModifierMode: "within_last" as const } : {}),
+                          ...(!keepMargin ? { comparisonMarginPercent: 0 } : {}),
+                        });
+                      }}
+                      className={cn(
+                        "h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0",
+                        !condition.operator && "text-muted-foreground"
+                      )}
                     >
-                      {SUPPORTED_TIMEFRAMES.map((t) => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
+                      <option value="">Select condition...</option>
+                      {validOps.map((op) => (
+                        <option key={op.id} value={op.id}>{op.label}</option>
                       ))}
                     </select>
                     <SelectFieldChevron />
                   </div>
                 </Field>
-              </div>
-            )}
-          </div>
-
-          {/* Condition (operator) */}
-          {leftInd && (
-            <div className="space-y-2">
-              <Field label="Condition" contentClassName="px-2 py-1">
-                <div className="relative">
-                  <select
-                    value={condition.operator}
-                    onChange={(e) => {
-                      const opId = e.target.value as OperatorId;
-                      const incDec =
-                        opId === "is_increasing" ||
-                        opId === "is_decreasing";
-                      const isDetected = opId === "detected";
-                      const keepMargin =
-                        opId === "greater_than" || opId === "less_than";
-                      onChange({
-                        operator: opId || ("" as OperatorId),
-                        hasTimeModifier: incDec || isDetected,
-                        timeModifierBars: incDec || isDetected ? 1 : 5,
-                        ...(isDetected ? { timeModifierMode: "within_last" as const } : {}),
-                        ...(!keepMargin ? { comparisonMarginPercent: 0 } : {}),
-                      });
-                    }}
-                    className={cn(
-                      "h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0",
-                      !condition.operator && "text-muted-foreground"
-                    )}
-                  >
-                    <option value="">Select condition...</option>
-                    {validOps.map((op) => (
-                      <option key={op.id} value={op.id}>{op.label}</option>
-                    ))}
-                  </select>
-                  <SelectFieldChevron />
-                </div>
-              </Field>
+              </FormRowWithHeaderGutter>
               {showAdvancedMarginUi && (
                 <button
                   type="button"
@@ -1557,126 +1663,144 @@ function SimpleConditionForm({
           {opDef && needsRight && !isRange && (
             <div className="space-y-3">
               {condition.rightType === "value" ? (
-                <Field label="Value" contentClassName="px-2 py-1">
-                  <div className="relative flex items-center">
-                    <Input
-                      type="number"
-                      value={condition.rightValue}
-                      onChange={(e) => onChange({ rightValue: e.target.value })}
-                      placeholder="Enter value"
-                      className="h-8 w-full border-0 bg-transparent pl-1 pr-9 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-                    />
-                    {condition.rightValue.trim() !== "" ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onChange({
-                            rightType: "indicator",
-                            rightIndicatorId: "",
-                            rightParams: {},
-                            rightValue: "",
-                          })
-                        }
-                        className="absolute right-0 top-1/2 -translate-y-1/2 h-8 w-9 flex items-center justify-center rounded-md text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        aria-label="Clear value"
-                      >
-                        <X className="h-4 w-4 shrink-0" strokeWidth={2} />
-                      </button>
-                    ) : (
+                <FormRowWithHeaderGutter>
+                  <Field label="Value" contentClassName="px-2 py-1">
+                    <div className="relative flex items-center">
+                      <Input
+                        type="number"
+                        value={condition.rightValue}
+                        onChange={(e) => onChange({ rightValue: e.target.value })}
+                        placeholder="Enter value"
+                        className="h-8 w-full border-0 bg-transparent pl-1 pr-9 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                      {condition.rightValue.trim() !== "" ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onChange({
+                              rightType: "indicator",
+                              rightIndicatorId: "",
+                              rightParams: {},
+                              rightValue: "",
+                            })
+                          }
+                          className="absolute right-0 top-1/2 -translate-y-1/2 h-8 w-9 flex items-center justify-center rounded-md text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          aria-label="Clear value"
+                        >
+                          <X className="h-4 w-4 shrink-0" strokeWidth={2} />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onRequestCompareWith()}
+                          className="absolute right-0 top-1/2 -translate-y-1/2 h-8 w-9 flex items-center justify-center rounded-md text-muted-foreground hover:text-primary hover:bg-accent/50 transition-colors"
+                          aria-label="Choose value or indicator"
+                        >
+                          <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
+                        </button>
+                      )}
+                    </div>
+                  </Field>
+                </FormRowWithHeaderGutter>
+              ) : !condition.rightIndicatorId ? (
+                <FormRowWithHeaderGutter>
+                  <Field label="Indicator 2" contentClassName="px-2 py-1">
+                    <div className="relative">
                       <button
                         type="button"
                         onClick={() => onRequestCompareWith()}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 h-8 w-9 flex items-center justify-center rounded-md text-muted-foreground hover:text-primary hover:bg-accent/50 transition-colors"
-                        aria-label="Choose value or indicator"
+                        className="h-8 w-full flex items-center rounded-md bg-transparent pl-1 pr-8 text-sm text-left text-muted-foreground hover:bg-accent/50 transition-colors"
                       >
-                        <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
+                        <span className="truncate min-w-0">Select indicator or value…</span>
                       </button>
-                    )}
-                  </div>
-                </Field>
-              ) : !condition.rightIndicatorId ? (
-                <Field label="Indicator 2" contentClassName="px-2 py-1">
-                  <div className="relative">
+                      <Indicator2FieldChevron />
+                    </div>
+                  </Field>
+                </FormRowWithHeaderGutter>
+              ) : (
+                <FormRowWithHeaderGutter
+                  trailingAction={
                     <button
                       type="button"
-                      onClick={() => onRequestCompareWith()}
-                      className="h-8 w-full flex items-center rounded-md bg-transparent pl-1 pr-8 text-sm text-left text-muted-foreground hover:bg-accent/50 transition-colors"
+                      onClick={clearRightIndicatorOperand}
+                      className={clearIconButtonClass}
+                      title="Clear indicator"
+                      aria-label="Clear indicator"
                     >
-                      <span className="truncate min-w-0">Select indicator or value…</span>
+                      <X className="h-4 w-4 shrink-0" strokeWidth={2} />
                     </button>
-                    <Indicator2FieldChevron />
-                  </div>
-                </Field>
-              ) : (
-                <div className="w-full min-w-0">
-                  <div className="flex items-start gap-2 min-w-0 flex-nowrap">
-                    <div className="min-w-0 flex-1">
-                      <Field label="Indicator 2" className="min-w-0" contentClassName="px-2 py-1">
-                        <div className="relative">
-                          <button
-                            type="button"
-                            onClick={() => onRequestCompareWith()}
-                            className="h-8 w-full flex items-center rounded-md bg-transparent pl-1 pr-9 text-sm text-left text-foreground hover:bg-accent/50 transition-colors"
-                            title={rightLabel()}
-                          >
-                            <span className="truncate min-w-0">{rightLabel()}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onChange({
-                                rightType: "indicator",
-                                rightIndicatorId: "",
-                                rightParams: {},
-                                rightValue: "",
-                              })
-                            }
-                            className="absolute right-0.5 top-1/2 z-10 -translate-y-1/2 h-7 w-7 flex items-center justify-center rounded-md text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors"
-                            aria-label="Clear indicator"
-                          >
-                            <X className="h-4 w-4 shrink-0" strokeWidth={2} />
-                          </button>
+                  }
+                >
+                  <div className="grid grid-cols-12 gap-2 items-start w-full min-w-0">
+                    <div className={cn("min-w-0", rightUsesChartTf ? "col-span-9" : "col-span-12")}>
+                      <div className="flex items-start gap-2 min-w-0 flex-nowrap">
+                        <div className="max-w-full flex-1 min-w-[7.25rem]">
+                          <Field label="Indicator 2" className="min-w-0" contentClassName="px-2 py-1">
+                            <button
+                              type="button"
+                              onClick={() => onRequestCompareWith()}
+                              className="h-8 w-full flex items-center rounded-md bg-transparent px-1 text-sm text-left text-foreground hover:bg-accent/50 transition-colors"
+                              title={rightLabel()}
+                            >
+                              <span className="truncate min-w-0">{rightLabel()}</span>
+                            </button>
+                          </Field>
                         </div>
-                      </Field>
+                        {rightInd && rightInd.params.length > 0 &&
+                          (rightPreset ? (
+                            <Field label={rightPreset.label} className="w-24 shrink-0" contentClassName="px-2 py-1">
+                              <div className="relative">
+                                <select
+                                  value={rightPreset.value}
+                                  onChange={(e) => {
+                                    const opt = rightPreset.options.find((o) => o.value === e.target.value);
+                                    if (opt) onChange({ rightParams: opt.params });
+                                  }}
+                                  className="h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0"
+                                >
+                                  {rightPreset.options.map((o) => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                  ))}
+                                </select>
+                                <SelectFieldChevron />
+                              </div>
+                            </Field>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setParamModal("right")}
+                              className="w-12 h-8 shrink-0 rounded-md border border-input bg-background flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
+                              title="Customize parameters"
+                            >
+                              <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <circle cx="3" cy="4" r="1.5" /><line x1="5" y1="4" x2="15" y2="4" />
+                                <circle cx="10" cy="8" r="1.5" /><line x1="1" y1="8" x2="8" y2="8" /><line x1="12" y1="8" x2="15" y2="8" />
+                                <circle cx="6" cy="12" r="1.5" /><line x1="1" y1="12" x2="4" y2="12" /><line x1="8" y1="12" x2="15" y2="12" />
+                              </svg>
+                            </button>
+                          ))}
+                      </div>
                     </div>
-                    {rightInd && rightInd.params.length > 0 ? (
-                      rightPreset ? (
-                        <Field label={rightPreset.label} className="w-20 shrink-0" contentClassName="px-2 py-1">
+                    {rightUsesChartTf && (
+                      <div className="col-span-3 min-w-0">
+                        <Field label="Timeframe" contentClassName="px-2 py-1">
                           <div className="relative">
                             <select
-                              value={rightPreset.value}
-                              onChange={(e) => {
-                                const opt = rightPreset.options.find((o) => o.value === e.target.value);
-                                if (opt) onChange({ rightParams: opt.params });
-                              }}
+                              value={condition.timeframe}
+                              onChange={(e) => onChange({ timeframe: e.target.value })}
                               className="h-8 w-full rounded-md bg-transparent pl-1 pr-8 text-sm appearance-none focus-visible:outline-none focus-visible:ring-0"
                             >
-                              {rightPreset.options.map((o) => (
-                                <option key={o.value} value={o.value}>{o.label}</option>
+                              {SUPPORTED_TIMEFRAMES.map((t) => (
+                                <option key={t.value} value={t.value}>{t.label}</option>
                               ))}
                             </select>
                             <SelectFieldChevron />
                           </div>
                         </Field>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setParamModal("right")}
-                          className="w-12 h-8 shrink-0 rounded-md border border-input bg-background flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
-                          title="Customize parameters"
-                        >
-                          <svg viewBox="0 0 16 16" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5">
-                            <circle cx="3" cy="4" r="1.5" /><line x1="5" y1="4" x2="15" y2="4" />
-                            <circle cx="10" cy="8" r="1.5" /><line x1="1" y1="8" x2="8" y2="8" /><line x1="12" y1="8" x2="15" y2="8" />
-                            <circle cx="6" cy="12" r="1.5" /><line x1="1" y1="12" x2="4" y2="12" /><line x1="8" y1="12" x2="15" y2="12" />
-                          </svg>
-                        </button>
-                      )
-                    ) : (
-                      <div className="w-20 shrink-0" aria-hidden />
+                      </div>
                     )}
                   </div>
-                </div>
+                </FormRowWithHeaderGutter>
               )}
             </div>
           )}
@@ -2099,10 +2223,11 @@ export function CustomScannerPage() {
   const [activeTab, setActiveTab] = useState<"standard" | "custom">("standard");
   const uiMode = "simple" as const;
   const [query, setQuery] = useState<QueryState>({
-    name: "",
+    name: DEFAULT_SCREENER_NAME,
     universe: "nifty50",
     groups: [createGroup("AND", "1d")],
     description: "",
+    preferences: { ...DEFAULT_SCREENER_PREFERENCES },
   });
   const [simpleConditions, setSimpleConditions] = useState<SimpleConditionRow[]>([]);
   const [builderAccordionOpen, setBuilderAccordionOpen] = useState<string[]>([]);
@@ -2131,9 +2256,17 @@ export function CustomScannerPage() {
   const [mobileConditionEditId, setMobileConditionEditId] = useState<string | null>(null);
   // Which view inside the mobile condition modal: "form" (default) or "compareWith"
   const [mobileConditionView, setMobileConditionView] = useState<"form" | "compareWith">("form");
+  /** After picking an indicator from the mobile edit sheet, reopen this row's edit modal (picker cancel uses it too). */
+  const [mobilePickerResumeRowId, setMobilePickerResumeRowId] = useState<string | null>(null);
 
   const [headerNotice, setHeaderNotice] = useState<string | null>(null);
   const headerNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const customQueryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const [savedScreenerId, setSavedScreenerId] = useState<string | null>(null);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  /** Fingerprint after last successful save via modal (for “unsaved changes”). */
+  const [savedWorkspaceFingerprint, setSavedWorkspaceFingerprint] = useState<string | null>(null);
 
   function flashHeaderNotice(message: string) {
     if (headerNoticeTimerRef.current) clearTimeout(headerNoticeTimerRef.current);
@@ -2179,11 +2312,25 @@ export function CustomScannerPage() {
     setCompareWithRowId(null);
     if (target === "new") {
       setBuilderAccordionOpen([]);
+      setMobilePickerResumeRowId(null);
     }
     setSidebarTarget(target);
     setSidebarOpen(true);
     setIndicatorSearch("");
     setSelectedGroup("Price");
+  }
+
+  /**
+   * Mobile: closing the indicator picker without a selection — return to main screener,
+   * or back to the edit-criteria sheet if the picker was opened from there.
+   */
+  function handleCloseIndicatorSidebar() {
+    setSidebarOpen(false);
+    if (mobilePickerResumeRowId) {
+      setMobileConditionEditId(mobilePickerResumeRowId);
+      setMobilePickerResumeRowId(null);
+    }
+    setMobileFilterOpen(false);
   }
 
   function handleOpenCompareWith(rowId: string) {
@@ -2210,6 +2357,8 @@ export function CustomScannerPage() {
     : undefined;
 
   function handleSidebarSelect(indicatorId: string) {
+    let rowIdForMobileEdit: string;
+
     if (sidebarTarget === "new") {
       const ind = getIndicator(indicatorId);
       const isPattern = ind?.outputType === "pattern";
@@ -2222,12 +2371,14 @@ export function CustomScannerPage() {
         row.timeModifierMode = "within_last";
         row.timeModifierBars = 1;
       }
+      rowIdForMobileEdit = row.id;
       setSimpleConditions((prev) => [...prev, row]);
       setBuilderAccordionOpen((prev) =>
         prev.includes(row.id) ? prev : [...prev, row.id]
       );
     } else {
       const { id, side } = sidebarTarget;
+      rowIdForMobileEdit = id;
       setSimpleConditions((prev) =>
         prev.map((c) => {
           if (c.id !== id) return c;
@@ -2259,7 +2410,17 @@ export function CustomScannerPage() {
       );
       setBuilderAccordionOpen((prev) => (prev.includes(id) ? prev : [...prev, id]));
     }
+
     setSidebarOpen(false);
+
+    const openMobileCriteriaSheet =
+      mobileFilterOpen || mobilePickerResumeRowId !== null;
+    if (openMobileCriteriaSheet) {
+      setMobileFilterOpen(false);
+      setMobileConditionEditId(rowIdForMobileEdit);
+      setMobileConditionView("form");
+    }
+    setMobilePickerResumeRowId(null);
   }
 
   const sidebarExcludePatterns =
@@ -2304,16 +2465,45 @@ export function CustomScannerPage() {
       if (!raw) return;
       const parsed: unknown = JSON.parse(raw);
       if (!isPersistedDiyV1(parsed)) return;
-      setQuery(parsed.query);
+      const pq = parsed.query;
+      setQuery({
+        ...pq,
+        name: (pq.name && pq.name.trim()) ? pq.name : DEFAULT_SCREENER_NAME,
+        preferences: { ...DEFAULT_SCREENER_PREFERENCES, ...pq.preferences },
+      });
       setSimpleConditions(parsed.simpleConditions);
       setCustomFormula(parsed.customFormula);
       setCustomNlInput(parsed.customNlInput);
       setCustomUniverse(parsed.customUniverse);
       setActiveTab(parsed.activeTab);
+      setSavedScreenerId(parsed.savedScreenerId ?? null);
     } catch {
       /* ignore corrupt storage */
     }
   }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          DIY_SCREENER_STORAGE_KEY,
+          JSON.stringify({
+            v: 1,
+            query,
+            simpleConditions,
+            customFormula,
+            customNlInput,
+            customUniverse,
+            activeTab,
+            savedScreenerId: savedScreenerId ?? undefined,
+          })
+        );
+      } catch {
+        /* quota or private mode */
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [query, simpleConditions, customFormula, customNlInput, customUniverse, activeTab, savedScreenerId]);
 
   async function _handleSaveToken() {
     if (!tokenInput.trim()) return;
@@ -2334,19 +2524,28 @@ export function CustomScannerPage() {
   }
 
   // Derive the effective query from whichever mode is active
-  const effectiveQuery = uiMode === "simple"
-    ? simpleToQuery(query.name, simpleConditions, query.universe, query.description ?? "")
-    : query;
+  const effectiveQuery = useMemo(() => {
+    const prefs = query.preferences ?? DEFAULT_SCREENER_PREFERENCES;
+    if (uiMode === "simple") {
+      return simpleToQuery(
+        query.name,
+        simpleConditions,
+        query.universe,
+        query.description ?? "",
+        prefs
+      );
+    }
+    return { ...query, preferences: prefs };
+  }, [query, simpleConditions, uiMode]);
 
   const handleRunScan = useCallback(async () => {
-    const q = uiMode === "simple" ? simpleToQuery(query.name, simpleConditions, query.universe, query.description ?? "") : query;
+    const q = effectiveQuery;
     setIsScanning(true);
     setHasRun(true);
     setResults([]);
-    setMobileFilterOpen(false);
     const cols = extractIndicatorColumns(q);
     setDynamicColumns(cols);
-    setScanProgress({ phase: "loading_data", message: "Starting scan..." });
+    setScanProgress({ phase: "loading_data", message: "Updating results..." });
     try {
       const matches = await runCustomScan(q, setScanProgress);
       setResults(matches);
@@ -2356,7 +2555,7 @@ export function CustomScannerPage() {
     } finally {
       setIsScanning(false);
     }
-  }, [query, simpleConditions, uiMode]);
+  }, [effectiveQuery]);
 
   async function handleGenerateQuery() {
     if (!customNlInput.trim()) return;
@@ -2381,13 +2580,14 @@ export function CustomScannerPage() {
       setCustomFormulaError(e instanceof FormulaParseError ? e.message : "Could not parse query.");
       return;
     }
+    const prefs = query.preferences ?? DEFAULT_SCREENER_PREFERENCES;
+    parsedQuery = { ...parsedQuery, preferences: prefs };
     setIsScanning(true);
     setHasRun(true);
     setResults([]);
-    setMobileFilterOpen(false);
     const cols = extractIndicatorColumns(parsedQuery);
     setDynamicColumns(cols);
-    setScanProgress({ phase: "loading_data", message: "Starting scan..." });
+    setScanProgress({ phase: "loading_data", message: "Updating results..." });
     try {
       const matches = await runCustomScan(parsedQuery, setScanProgress);
       setResults(matches);
@@ -2467,6 +2667,72 @@ export function CustomScannerPage() {
     0
   );
 
+  const workspaceFingerprint = useMemo(
+    () =>
+      JSON.stringify({
+        activeTab,
+        customFormula,
+        customUniverse,
+        simpleConditions,
+        name: query.name,
+        desc: query.description,
+        prefs: query.preferences,
+        groups: query.groups,
+        universe: query.universe,
+      }),
+    [activeTab, customFormula, customUniverse, simpleConditions, query]
+  );
+
+  const fpBootstrappedRef = useRef(false);
+  useEffect(() => {
+    if (fpBootstrappedRef.current) return;
+    if (savedScreenerId && savedWorkspaceFingerprint === null) {
+      setSavedWorkspaceFingerprint(workspaceFingerprint);
+      fpBootstrappedRef.current = true;
+    }
+  }, [savedScreenerId, savedWorkspaceFingerprint, workspaceFingerprint]);
+
+  const hasUnsavedChanges =
+    !!savedScreenerId &&
+    savedWorkspaceFingerprint !== null &&
+    workspaceFingerprint !== savedWorkspaceFingerprint;
+
+  const handleRunScanRef = useRef(handleRunScan);
+  handleRunScanRef.current = handleRunScan;
+  const handleRunCustomScanRef = useRef(handleRunCustomScan);
+  handleRunCustomScanRef.current = handleRunCustomScan;
+
+  useEffect(() => {
+    if (activeTab !== "standard") return;
+    if (conditionCount === 0) {
+      setHasRun(false);
+      setResults([]);
+      setScanProgress(null);
+      return;
+    }
+    const t = setTimeout(() => void handleRunScanRef.current(), 750);
+    return () => clearTimeout(t);
+  }, [activeTab, conditionCount, simpleConditions, query.universe]);
+
+  useEffect(() => {
+    if (activeTab !== "custom") return;
+    if (!customFormula.trim()) {
+      setHasRun(false);
+      setResults([]);
+      setScanProgress(null);
+      return;
+    }
+    try {
+      parseFormula(customFormula, customUniverse);
+    } catch {
+      setHasRun(false);
+      setResults([]);
+      return;
+    }
+    const t = setTimeout(() => void handleRunCustomScanRef.current(), 750);
+    return () => clearTimeout(t);
+  }, [activeTab, customFormula, customUniverse]);
+
   // Mobile filter chips — one per active Standard condition, or per formula line for Custom
   const mobileFilterChips: { id: string; label: string; onPress: () => void }[] =
     activeTab === "standard"
@@ -2499,39 +2765,100 @@ export function CustomScannerPage() {
             onPress: () => {}, // just opens the sheet
           }));
 
-  function handleSaveDiyScreener() {
-    const nameToStore = query.name.trim() || "Custom screener";
-    const nextQuery = { ...query, name: nameToStore };
-    if (nameToStore !== query.name) setQuery(nextQuery);
+  const customQueryIsValid = useMemo(() => {
+    if (!customFormula.trim()) return false;
     try {
-      localStorage.setItem(
-        DIY_SCREENER_STORAGE_KEY,
-        JSON.stringify({
-          v: 1,
-          query: nextQuery,
-          simpleConditions,
-          customFormula,
-          customNlInput,
-          customUniverse,
-          activeTab,
-        })
-      );
-      flashHeaderNotice("Screener saved");
+      parseFormula(customFormula, customUniverse);
+      return true;
     } catch {
-      flashHeaderNotice("Could not save");
+      return false;
     }
+  }, [customFormula, customUniverse]);
+
+  const canSaveScreener =
+    activeTab === "standard" ? conditionCount > 0 : customQueryIsValid;
+
+  async function handleSaveModalSubmit(payload: {
+    name: string;
+    description: string;
+    preferences: ScreenerPreferences;
+  }): Promise<{ ok: true } | { ok: false; message: string }> {
+    let fullQuery: QueryState;
+    if (activeTab === "custom") {
+      try {
+        const parsed = parseFormula(customFormula, customUniverse);
+        fullQuery = {
+          ...parsed,
+          name: payload.name,
+          description: payload.description,
+          preferences: payload.preferences,
+        };
+      } catch {
+        return { ok: false, message: "Fix your custom query before saving." };
+      }
+    } else {
+      fullQuery = {
+        ...effectiveQuery,
+        name: payload.name,
+        description: payload.description,
+        preferences: payload.preferences,
+      };
+    }
+
+    setQuery((q) => ({
+      ...q,
+      name: payload.name,
+      description: payload.description,
+      preferences: payload.preferences,
+    }));
+
+    if (savedScreenerId && !savedScreenerId.startsWith("local_")) {
+      const ok = await updateSavedScreener(savedScreenerId, fullQuery);
+      if (!ok) {
+        return { ok: false, message: "Could not update. Check your connection and try again." };
+      }
+    } else {
+      const created = await createSavedScreener(fullQuery);
+      if (created) {
+        setSavedScreenerId(created);
+      } else if (!savedScreenerId) {
+        setSavedScreenerId(`local_${crypto.randomUUID()}`);
+      }
+    }
+
+    const nextFp = JSON.stringify({
+      activeTab,
+      customFormula,
+      customUniverse,
+      simpleConditions,
+      name: payload.name,
+      desc: payload.description,
+      prefs: payload.preferences,
+      groups: fullQuery.groups,
+      universe: fullQuery.universe,
+    });
+    setSavedWorkspaceFingerprint(nextFp);
+    flashHeaderNotice("Screener saved");
+    return { ok: true };
   }
 
   async function handleShareDiyScreener() {
-    const title = query.name.trim() || "Custom screener";
-    const url = window.location.href;
+    if (!savedScreenerId) {
+      setSaveModalOpen(true);
+      return;
+    }
+    const title = query.name.trim() || DEFAULT_SCREENER_NAME;
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}${window.location.pathname}?screener=${encodeURIComponent(savedScreenerId!)}`
+        : "";
     const summaryLine = summary.trim();
     const statusLine =
       isScanning
-        ? scanProgress?.message ?? "Running scan..."
+        ? scanProgress?.message ?? "Updating results..."
         : hasRun
           ? `${results.length} match${results.length !== 1 ? "es" : ""} found`
-          : "Build conditions and run scan";
+          : "DIY screener on Upstox Scanners";
     const text = [statusLine, summaryLine ? summaryLine.slice(0, 400) : ""].filter(Boolean).join("\n\n");
 
     if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
@@ -2550,18 +2877,35 @@ export function CustomScannerPage() {
     }
   }
 
+  function openSaveScreenerModal() {
+    setSaveModalOpen(true);
+  }
+
   const screenerNameInput = (
     <Input
       value={query.name}
       onChange={(e) => setQuery((q) => ({ ...q, name: e.target.value }))}
-      placeholder="Custom screener"
+      placeholder={DEFAULT_SCREENER_NAME}
       aria-label="Screener name"
       className="h-9 font-bold text-base text-foreground bg-background border-input shadow-sm w-full max-w-md md:font-semibold md:text-sm"
     />
   );
 
+  const shareButton = (className: string) => (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className={className}
+      onClick={() => void handleShareDiyScreener()}
+    >
+      <Share2 className="h-3.5 w-3.5" />
+      Share
+    </Button>
+  );
+
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] min-h-[500px] relative">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] min-h-[500px] relative">
       {/* ── Full-width page header (Conditions + stock list) ── */}
       {/* Mobile */}
       <div className="md:hidden px-4 pt-5 pb-3 border-b border-border bg-background shrink-0 space-y-3">
@@ -2573,27 +2917,27 @@ export function CustomScannerPage() {
             {screenerNameInput}
             <p className="text-xs text-muted-foreground">
               {isScanning
-                ? scanProgress?.message ?? "Running scan..."
+                ? scanProgress?.message ?? "Updating results..."
                 : hasRun
                   ? `${results.length} match${results.length !== 1 ? "es" : ""}${lastScannedAt ? ` · Updated ${timeAgo(lastScannedAt)}` : ""}`
                   : isLoadingDefaults
                     ? "Loading..."
                     : `${defaultStocks.length}+ items`}
             </p>
+            {hasUnsavedChanges && (
+              <p className="text-[10px] font-medium text-amber-800">Unsaved changes — save to sync settings</p>
+            )}
             <div className="flex flex-wrap items-center gap-2 pt-1">
+              {shareButton("gap-1.5 h-9")}
               <Button
                 type="button"
-                variant="outline"
                 size="sm"
                 className="gap-1.5 h-9"
-                onClick={() => void handleShareDiyScreener()}
+                disabled={!canSaveScreener}
+                onClick={openSaveScreenerModal}
               >
-                <Share2 className="h-3.5 w-3.5" />
-                Share
-              </Button>
-              <Button type="button" size="sm" className="gap-1.5 h-9" onClick={handleSaveDiyScreener}>
                 <Save className="h-3.5 w-3.5" />
-                Save
+                Save screener
               </Button>
               {headerNotice && (
                 <span className="text-xs text-primary font-medium w-full sm:w-auto">{headerNotice}</span>
@@ -2663,57 +3007,56 @@ export function CustomScannerPage() {
         </div>
       </div>
 
-      {/* Desktop */}
-      <div className="hidden md:block px-4 py-4 border-b border-border bg-muted/30 shrink-0">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-              <Search size={16} />
-            </div>
-            <div className="min-w-0 space-y-1 flex-1">
-              {screenerNameInput}
-              <p className="text-xs text-muted-foreground">
-                {isScanning && scanProgress
-                  ? scanProgress.message
-                  : hasRun
-                    ? `${results.length} match${results.length !== 1 ? "es" : ""} found${lastScannedAt ? ` · Last scanned ${timeAgo(lastScannedAt)}` : ""}`
-                    : defaultStocks.length > 0
-                      ? `${defaultStocks.length} stocks · No filter applied`
-                      : "Build conditions and run scan"}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
-            {headerNotice && (
-              <span className="text-xs text-primary font-medium order-first md:order-none">{headerNotice}</span>
-            )}
-            {hasRun && !isScanning && (
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {conditionCount} condition{conditionCount !== 1 ? "s" : ""} applied
-              </span>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={() => void handleShareDiyScreener()}
-            >
-              <Share2 className="h-3.5 w-3.5" />
-              Share
-            </Button>
-            <Button type="button" size="sm" className="gap-1.5" onClick={handleSaveDiyScreener}>
-              <Save className="h-3.5 w-3.5" />
-              Save
-            </Button>
-          </div>
+      {/* Desktop sub-header */}
+      <div className="hidden md:flex items-center justify-between gap-4 px-6 h-12 bg-background shrink-0">
+        {/* Left: editable screener name */}
+        <div className="flex items-center gap-2 min-w-0 flex-1 group">
+          <input
+            value={query.name}
+            onChange={(e) => setQuery((q) => ({ ...q, name: e.target.value }))}
+            placeholder={DEFAULT_SCREENER_NAME}
+            aria-label="Screener name"
+            className="text-lg font-bold text-foreground bg-transparent border-0 outline-none p-0 m-0 min-w-0 w-auto max-w-xs placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none truncate"
+            style={{ width: `${Math.max((query.name || DEFAULT_SCREENER_NAME).length, 12)}ch` }}
+          />
+          <Pencil
+            size={13}
+            className="text-muted-foreground/40 shrink-0 group-hover:text-muted-foreground transition-colors cursor-pointer"
+            onClick={(e) => {
+              const input = (e.currentTarget.parentElement?.querySelector("input") as HTMLInputElement | null);
+              input?.focus();
+            }}
+          />
+          {hasUnsavedChanges && (
+            <Badge variant="outline" className="text-[10px] font-medium border-amber-300 text-amber-800 bg-amber-50 shrink-0">
+              Unsaved changes
+            </Badge>
+          )}
+          {headerNotice && (
+            <span className="text-xs text-primary font-medium ml-1">{headerNotice}</span>
+          )}
+        </div>
+
+        {/* Share — opens save modal if not yet persisted */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => void handleShareDiyScreener()}
+            className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-border/60 bg-transparent text-sm font-medium text-foreground hover:bg-muted/60 transition-colors"
+          >
+            <Share2 size={13} />
+            Share
+          </button>
         </div>
       </div>
+
+      {/* Soft inset separator */}
+      <div className="hidden md:block h-px bg-border/40 mx-6" />
 
       <div className="flex flex-row flex-1 min-h-0 min-w-0">
       {/* ── Left: Query Builder ── */}
       <div className={cn(
-        "flex flex-col min-h-0 border-r border-border bg-muted/10",
+        "flex flex-col min-h-0 border-r border-border/60 bg-background",
         // Desktop: fixed 460px sidebar
         "md:w-[460px] md:shrink-0 md:relative md:flex",
         // Mobile: full-screen overlay when open, hidden otherwise
@@ -2853,6 +3196,7 @@ export function CustomScannerPage() {
                   </div>
                   <Field label="" contentClassName="p-0">
                     <textarea
+                      ref={customQueryTextareaRef}
                       value={customFormula}
                       onChange={(e) => {
                         setCustomFormula(e.target.value);
@@ -2954,55 +3298,123 @@ export function CustomScannerPage() {
               {summary}
             </div>
           )}
-          <div className="p-3">
+          <div className="p-3 space-y-2">
             {activeTab === "custom" ? (
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => void handleRunCustomScan()}
-                  disabled={!customFormula.trim() || !!customFormulaError || isScanning}
-                  className={cn(
-                    "flex-1 gap-1.5 h-11 text-sm",
-                    customFormula.trim() && !customFormulaError && !isScanning
-                      ? "bg-green-600 hover:bg-green-700 text-white"
-                      : "bg-muted text-muted-foreground border border-border hover:bg-muted"
-                  )}
-                >
-                  {isScanning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                  {isScanning ? "Scanning..." : "Run scan"}
-                </Button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                {uiMode === "simple" && (
+              <>
+                <div className="flex gap-2">
                   <Button
-                    onClick={() => handleOpenSidebar("new")}
-                    className="flex-1 gap-1.5 h-11 text-sm"
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      customQueryTextareaRef.current?.focus();
+                      customQueryTextareaRef.current?.setSelectionRange(
+                        customFormula.length,
+                        customFormula.length
+                      );
+                    }}
+                    className="flex-1 gap-1.5 h-11 text-sm border-primary/30"
                   >
                     <Plus size={14} />
-                    Add Condition
+                    Add condition
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={openSaveScreenerModal}
+                    disabled={!canSaveScreener}
+                    className="flex-1 gap-1.5 h-11 text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    <Save size={14} />
+                    Save screener
+                  </Button>
+                </div>
+                <p className="text-[10px] text-center text-muted-foreground leading-relaxed px-1">
+                  Results update automatically when your query is valid.
+                </p>
+                {savedScreenerId && (
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    <span className="text-[10px] text-muted-foreground">Saved</span>
+                    <button
+                      type="button"
+                      onClick={() => void handleShareDiyScreener()}
+                      className="text-[10px] font-medium text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      <Share2 size={10} />
+                      Share
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openSaveScreenerModal}
+                      className="text-[10px] font-medium text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      <Settings2 size={10} />
+                      Edit settings
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {uiMode === "simple" ? (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleOpenSidebar("new")}
+                      className="flex-1 gap-1.5 h-11 text-sm border-primary/30"
+                    >
+                      <Plus size={14} />
+                      Add condition
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={openSaveScreenerModal}
+                      disabled={!canSaveScreener}
+                      className="flex-1 gap-1.5 h-11 text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                    >
+                      <Save size={14} />
+                      Save screener
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={openSaveScreenerModal}
+                    disabled={!canSaveScreener}
+                    className="w-full gap-1.5 h-11 text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    <Save size={14} />
+                    Save screener
                   </Button>
                 )}
-                <Button
-                  onClick={() => void handleRunScan()}
-                  disabled={conditionCount === 0 || isScanning}
-                  className={cn(
-                    "flex-1 gap-1.5 h-11 text-sm",
-                    conditionCount > 0 && !isScanning
-                      ? "bg-green-600 hover:bg-green-700 text-white"
-                      : "bg-muted text-muted-foreground border border-border hover:bg-muted"
-                  )}
-                >
-                  {isScanning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                  {isScanning ? "Scanning..." : "Run scan"}
-                </Button>
-              </div>
+                {savedScreenerId && (
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    <span className="text-[10px] text-muted-foreground">Saved</span>
+                    <button
+                      type="button"
+                      onClick={() => void handleShareDiyScreener()}
+                      className="text-[10px] font-medium text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      <Share2 size={10} />
+                      Share
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openSaveScreenerModal}
+                      className="text-[10px] font-medium text-primary hover:underline inline-flex items-center gap-1"
+                    >
+                      <Settings2 size={10} />
+                      Edit settings
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
 
       {/* ── Right: Results ── */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-background">
 
         {/* Results body */}
         {!hasRun ? (
@@ -3017,7 +3429,9 @@ export function CustomScannerPage() {
               ) : defaultStocks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-48 gap-3 px-6 text-center">
                   <Search size={28} className="text-muted-foreground/40" />
-                  <p className="text-sm text-muted-foreground">No data yet. Tap <strong>Add filter</strong> and run a scan to load stocks.</p>
+                  <p className="text-sm text-muted-foreground">
+                    No data yet. Tap <strong>Add filter</strong> — results update automatically when you add conditions.
+                  </p>
                 </div>
               ) : (
                 <>
@@ -3059,11 +3473,13 @@ export function CustomScannerPage() {
             {/* ── Desktop: default stocks table or empty state ── */}
             {defaultStocks.length > 0 ? (
               <div className="hidden md:block flex-1 overflow-auto">
-                <div className="px-4 py-2 bg-muted/20 border-b border-border/60">
-                  <span className="text-xs text-muted-foreground italic">All stocks — no filter applied. Add conditions and run scan to filter.</span>
+                <div className="px-4 py-2 bg-muted/30 border-b border-border/60">
+                  <span className="text-xs text-muted-foreground">
+                    All stocks — no filter applied. Add conditions; results update automatically.
+                  </span>
                 </div>
                 <table className="text-sm border-collapse" style={{ minWidth: "100%" }}>
-                  <thead className="sticky top-0 bg-background border-b border-border z-10">
+                  <thead className="sticky top-0 bg-background border-b border-border/60 z-10">
                     <tr className="text-left text-muted-foreground whitespace-nowrap">
                       <th className="py-3 px-3 font-medium w-8">#</th>
                       <th className="py-3 px-3 font-medium min-w-[130px]">Symbol</th>
@@ -3074,7 +3490,7 @@ export function CustomScannerPage() {
                   </thead>
                   <tbody>
                     {defaultStocks.map((row, idx) => (
-                      <tr key={row.symbol} className="border-b border-border/50 hover:bg-muted/30 transition-colors whitespace-nowrap">
+                      <tr key={row.symbol} className="border-b border-border/30 even:bg-muted/15 hover:bg-muted/30 transition-colors whitespace-nowrap">
                         <td className="py-2.5 px-3 text-muted-foreground text-xs">{idx + 1}</td>
                         <td className="py-2.5 px-3">
                           <span className="font-medium">{row.symbol}</span>
@@ -3098,18 +3514,20 @@ export function CustomScannerPage() {
               </div>
             ) : (
               <div className="hidden md:flex flex-1 items-center justify-center p-8">
-                <div className="text-center max-w-xs">
-                  <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                    <Search size={28} className="text-primary/60" />
+                <div className="text-center max-w-sm">
+                  <div className="w-20 h-20 rounded-2xl bg-primary/10 ring-1 ring-border/30 flex items-center justify-center mx-auto mb-4">
+                    <Search size={32} className="text-primary/60" />
                   </div>
-                  <h3 className="font-semibold text-foreground mb-1">Build your screener</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Add conditions using technical indicators, price, volume,
-                    candlestick patterns, and more — then click <strong>Run scan</strong> to see matching stocks.
+                  <h3 className="text-lg font-semibold text-foreground mb-1">Build your screener</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Add conditions using technical indicators, price, volume, candlestick patterns, and more — results
+                    update automatically. <strong>Save screener</strong> to turn on alerts, a run schedule, and sharing.
                   </p>
                   {!freshness.daily && (
-                    <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-                      No data loaded yet. Click <strong>Refresh 1D</strong>, <strong>Refresh 15m</strong>, or <strong>Refresh 1M</strong> to fetch candle data from Upstox into Supabase first.
+                    <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 leading-relaxed">
+                      No candle data loaded yet. Use <strong>Refresh 1D</strong>, <strong>Refresh 15m</strong>, or{" "}
+                      <strong>Refresh 1M</strong> to fetch data from Upstox into Supabase. You can still save your
+                      screener; matches need fresh data to be accurate.
                     </div>
                   )}
                 </div>
@@ -3140,21 +3558,21 @@ export function CustomScannerPage() {
         ) : scanProgress?.phase === "error" ? (
           <div className="flex-1 flex items-center justify-center p-8">
             <div className="text-center max-w-sm">
-              <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center mx-auto mb-3">
+              <div className="w-16 h-16 rounded-xl bg-red-50 ring-1 ring-border/30 flex items-center justify-center mx-auto mb-3">
                 <X size={20} className="text-red-500" />
               </div>
-              <h3 className="font-semibold text-foreground mb-1">Scan failed</h3>
-              <p className="text-sm text-muted-foreground">{scanProgress.message}</p>
+              <h3 className="text-lg font-semibold text-foreground mb-1">Scan failed</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{scanProgress.message}</p>
             </div>
           </div>
         ) : results.length === 0 ? (
           <div className="flex-1 flex items-center justify-center p-8">
             <div className="text-center max-w-xs">
-              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mx-auto mb-3">
+              <div className="w-16 h-16 rounded-xl bg-muted ring-1 ring-border/30 flex items-center justify-center mx-auto mb-3">
                 <Search size={20} className="text-muted-foreground" />
               </div>
-              <h3 className="font-semibold text-foreground mb-1">No matches</h3>
-              <p className="text-sm text-muted-foreground">
+              <h3 className="text-lg font-semibold text-foreground mb-1">No matches</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 No stocks matched your conditions. Try adjusting the parameters or relaxing some constraints.
               </p>
             </div>
@@ -3198,7 +3616,7 @@ export function CustomScannerPage() {
             {/* Desktop: full table */}
             <div className="hidden md:block flex-1 overflow-auto">
             <table className="text-sm border-collapse" style={{ minWidth: "100%" }}>
-              <thead className="sticky top-0 bg-background border-b border-border z-10">
+              <thead className="sticky top-0 bg-background border-b border-border/60 z-10">
                 <tr className="text-left text-muted-foreground whitespace-nowrap">
                   <th className="py-3 px-3 font-medium w-8 sticky left-0 bg-background z-20">#</th>
                   <th className="py-3 px-3 font-medium sticky left-8 bg-background z-20 min-w-[130px]">Symbol</th>
@@ -3244,7 +3662,7 @@ export function CustomScannerPage() {
                 {sortedResults.map((row, idx) => (
                   <tr
                     key={row.symbol}
-                    className="border-b border-border/50 hover:bg-muted/30 transition-colors whitespace-nowrap"
+                    className="border-b border-border/30 even:bg-muted/15 hover:bg-muted/30 transition-colors whitespace-nowrap"
                   >
                     <td className="py-2.5 px-3 text-muted-foreground text-xs sticky left-0 bg-background">
                       {idx + 1}
@@ -3312,7 +3730,7 @@ export function CustomScannerPage() {
               "inset-0",
               mobileFilterOpen ? "fixed z-[59]" : "absolute z-30"
             )}
-            onClick={() => setSidebarOpen(false)}
+            onClick={handleCloseIndicatorSidebar}
           />
           {/* Indicator panel — full-screen on mobile, beside-builder on desktop */}
           <div className={cn(
@@ -3343,8 +3761,10 @@ export function CustomScannerPage() {
                 </div>
               </div>
               <button
-                onClick={() => setSidebarOpen(false)}
+                type="button"
+                onClick={handleCloseIndicatorSidebar}
                 className="text-muted-foreground hover:text-foreground"
+                aria-label="Back to screener"
               >
                 <X size={16} />
               </button>
@@ -3497,6 +3917,8 @@ export function CustomScannerPage() {
         function deleteCond() {
           setSimpleConditions((prev) => prev.filter((c) => c.id !== mobileConditionEditId));
           setMobileConditionEditId(null);
+          setMobileFilterOpen(false);
+          setMobilePickerResumeRowId(null);
         }
         const condIndex = simpleConditions.findIndex((c) => c.id === mobileConditionEditId);
 
@@ -3507,8 +3929,14 @@ export function CustomScannerPage() {
               {/* Header — always "Edit Condition", just X to close */}
               <div className="px-4 py-3 flex items-center gap-3 border-b border-border shrink-0">
                 <button
-                  onClick={() => setMobileConditionEditId(null)}
+                  type="button"
+                  onClick={() => {
+                    setMobileConditionEditId(null);
+                    setMobileFilterOpen(false);
+                    setMobilePickerResumeRowId(null);
+                  }}
                   className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Close"
                 >
                   <X size={15} />
                 </button>
@@ -3528,6 +3956,7 @@ export function CustomScannerPage() {
                   canDelete={true}
                   variant="accordion"
                   onIndicatorClick={(side) => {
+                    setMobilePickerResumeRowId(cond.id);
                     setMobileConditionEditId(null);
                     handleOpenSidebar({ id: cond.id, side });
                     setMobileFilterOpen(true);
@@ -3547,7 +3976,12 @@ export function CustomScannerPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setMobileConditionEditId(null)}
+                  onClick={() => {
+                    setMobileConditionEditId(null);
+                    setMobileFilterOpen(false);
+                    setMobilePickerResumeRowId(null);
+                    setMobileConditionView("form");
+                  }}
                   className="flex-[2] h-11 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
                 >
                   Done
@@ -3592,6 +4026,17 @@ export function CustomScannerPage() {
           </>
         );
       })()}
+
+      <SaveScreenerDialog
+        open={saveModalOpen}
+        onOpenChange={setSaveModalOpen}
+        isFirstSave={savedScreenerId === null}
+        initialName={query.name}
+        initialDescription={query.description ?? ""}
+        initialPreferences={query.preferences ?? DEFAULT_SCREENER_PREFERENCES}
+        onSubmit={handleSaveModalSubmit}
+        onShare={() => void handleShareDiyScreener()}
+      />
     </div>
   );
 }

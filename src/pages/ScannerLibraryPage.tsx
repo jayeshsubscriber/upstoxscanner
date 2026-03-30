@@ -50,11 +50,19 @@ export function ScannerLibraryPage() {
   return (
     <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Pre-Built Scanners</h1>
-        <p className="text-muted-foreground">
-          {PRE_BUILT_SCANNERS.length} scanners across 5 trading styles — updated live during market hours
-        </p>
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Pre-Built Scanners</h1>
+          <p className="text-muted-foreground">
+            {PRE_BUILT_SCANNERS.length} scanners across 5 trading styles — updated live during market hours
+          </p>
+        </div>
+        <Link
+          to="/app/scanners"
+          className="text-sm font-medium text-primary hover:underline shrink-0"
+        >
+          Mobile app layout →
+        </Link>
       </div>
 
       {/* Search + Filter */}

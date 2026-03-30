@@ -9,6 +9,8 @@ import { MarketplaceDetailPage } from "@/pages/MarketplaceDetailPage";
 import { AlertsDashboardPage } from "@/pages/AlertsDashboardPage";
 import { CreatorProfilePage } from "@/pages/CreatorProfilePage";
 import { DiyUiSamplesPage } from "@/pages/DiyUiSamplesPage";
+import { AppScannersHubPage } from "@/pages/AppScannersHubPage";
+import { MobileScannerPage } from "@/pages/MobileScannerPage";
 
 function App() {
   return (
@@ -16,6 +18,8 @@ function App() {
       <AppLayout>
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/app/scanners" element={<AppScannersHubPage />} />
+          <Route path="/app/scanners/mobile" element={<MobileScannerPage />} />
           <Route path="/scanners" element={<ScannerLibraryPage />} />
           <Route path="/scanners/:id" element={<ScannerDetailPage />} />
           <Route path="/diy" element={<DIYScreenerPage />} />

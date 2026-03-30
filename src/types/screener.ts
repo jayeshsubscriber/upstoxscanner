@@ -35,11 +35,36 @@ export interface GroupState {
   conditions: ConditionState[];
 }
 
+/** When the screener should run automatically (server-side scheduling can use this later). */
+export type ScreenerRunSchedule =
+  | "manual"
+  | "daily_after_close"
+  | "daily_pre_market"
+  | "weekly_sunday";
+
+export interface ScreenerPreferences {
+  runSchedule: ScreenerRunSchedule;
+  notifyEmail: boolean;
+  notifyPush: boolean;
+  notifyInApp: boolean;
+  visibility: "private" | "public";
+}
+
+export const DEFAULT_SCREENER_PREFERENCES: ScreenerPreferences = {
+  runSchedule: "manual",
+  notifyEmail: false,
+  notifyPush: false,
+  notifyInApp: true,
+  visibility: "private",
+};
+
 export interface QueryState {
   name: string;
   universe: string;
   groups: GroupState[];
   description?: string;
+  /** Saved with the screener; ignored by the scan engine. */
+  preferences?: ScreenerPreferences;
 }
 
 export interface IndicatorColumn {

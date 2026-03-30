@@ -156,7 +156,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Footer — hidden on DIY screener for full-height builder */}
-      {!location.pathname.startsWith("/diy") && (
+      {!location.pathname.startsWith("/diy") && !location.pathname.startsWith("/app/") && (
         <footer className="border-t border-border bg-muted/30 py-8 mt-auto">
           <div className="max-w-screen-xl mx-auto px-4 sm:px-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">

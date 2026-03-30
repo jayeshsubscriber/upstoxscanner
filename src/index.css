@@ -42,8 +42,27 @@ input[type="number"] {
   * {
     @apply border-border;
   }
+  html {
+    /* Reduce arbitrary text inflation on orientation change (esp. iOS) */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground antialiased;
+  }
+}
+
+/*
+ * iOS Safari (and some Android browsers) auto-zoom focused inputs when font-size < 16px.
+ * Tailwind text-sm is 14px, so we force ≥16px on small viewports. !important wins over
+ * utility classes on the same elements (native selects, etc.).
+ */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="range"]):not([type="file"]):not([type="image"]):not([type="hidden"]),
+  select,
+  textarea {
+    font-size: 1rem !important;
+    line-height: 1.5rem;
   }
 }
 
@@ -69,5 +88,42 @@ input[type="number"] {
   }
   .animate-accordion-up {
     animation: accordion-up 0.2s ease-out;
+  }
+
+  /* Mobile scanner page — live signal highlight pulse */
+  @keyframes signal-highlight {
+    0%, 100% {
+      box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+    }
+    50% {
+      box-shadow: 0 0 0 3px hsl(var(--primary) / 0.1);
+    }
+  }
+  .mobile-signal-highlight {
+    animation: signal-highlight 3s ease-in-out infinite;
+  }
+
+  /* Feed card staggered entry animation */
+  @keyframes feed-card-enter {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .feed-card-enter {
+    animation: feed-card-enter 0.4s ease-out both;
+  }
+
+  /* Scrollbar hide utility for horizontal scrolls */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 }

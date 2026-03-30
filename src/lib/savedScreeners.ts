@@ -54,6 +54,16 @@ export async function getSavedScreener(id: string): Promise<SavedScreener | null
   };
 }
 
+function queryPayload(q: QueryState) {
+  return {
+    name: q.name,
+    universe: q.universe,
+    groups: q.groups,
+    description: q.description,
+    preferences: q.preferences,
+  };
+}
+
 /** Create a new saved screener. Returns the created id or null on failure. */
 export async function createSavedScreener(q: QueryState): Promise<string | null> {
   if (!supabase) return null;
@@ -61,7 +71,7 @@ export async function createSavedScreener(q: QueryState): Promise<string | null>
     name: q.name.trim() || "Unnamed screener",
     universe: q.universe,
     description: (q.description ?? "").trim(),
-    query: { name: q.name, universe: q.universe, groups: q.groups, description: q.description },
+    query: queryPayload(q),
     updated_at: new Date().toISOString(),
   };
   const { data, error } = await supabase
@@ -88,7 +98,7 @@ export async function updateSavedScreener(
       name: q.name.trim() || "Unnamed screener",
       universe: q.universe,
       description: (q.description ?? "").trim(),
-      query: { name: q.name, universe: q.universe, groups: q.groups, description: q.description },
+      query: queryPayload(q),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
