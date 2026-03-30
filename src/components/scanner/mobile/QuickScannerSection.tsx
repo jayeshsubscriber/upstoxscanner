@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { ConditionState, QueryState, ScanResultRow } from "@/types/screener";
 import { runCustomScan, extractIndicatorColumns } from "@/lib/customScanRunner";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Loader2, SlidersHorizontal, Zap } from "lucide-react";
+import { Loader2, SlidersHorizontal, Zap } from "lucide-react";
 
 type QuickIndicator = "price" | "ema" | "rsi" | "macd";
 
@@ -536,8 +535,15 @@ export function QuickScannerSection() {
             </button>
           </div>
 
-          {/* Results list (no outer table border to match Intraday layout) */}
+          {/* Results list (edge-to-edge section, with column header) */}
           <div className="bg-white">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-[#F1F1F1] bg-white">
+              <div className="w-1/2 text-[12px] font-medium text-[#777777]">Scrip</div>
+              <div className="w-1/4 text-right text-[12px] font-medium text-[#777777]">LTP</div>
+              <div className="w-1/4 text-right text-[12px] font-medium text-[#777777]">
+                {indicatorColumnLabel || "Value"}
+              </div>
+            </div>
             {isApplying ? (
               <div className="flex items-center justify-center p-6 text-muted-foreground gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" /> Running quick scan...
@@ -551,14 +557,8 @@ export function QuickScannerSection() {
                   const showCurrency = indicatorColumnLabel.toLowerCase().includes("ema") || indicatorColumnLabel.toLowerCase().includes("price");
                   const showAsPct = indicatorColumnLabel.toLowerCase().includes("change");
                   return (
-                    <div
-                      key={r.symbol}
-                      className="flex items-center gap-2 px-3 h-[52px] transition-colors"
-                    >
+                    <div key={r.symbol} className="flex items-center gap-2 px-3 h-[52px] transition-colors">
                       <div className="w-1/2 min-w-0 flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-[6px] bg-[#FBF8FD] flex items-center justify-center shrink-0">
-                          <span className="text-[10px] font-bold text-primary">{r.symbol.slice(0, 2)}</span>
-                        </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-foreground truncate">{r.symbol}</p>
                           <p className="text-[10px] text-muted-foreground truncate">{r.name}</p>
@@ -573,15 +573,6 @@ export function QuickScannerSection() {
                         <p className="text-sm font-semibold tabular-nums text-foreground">
                           {showAsPct ? formatMaybePct(Number(v)) : showCurrency ? formatInr(Number(v)) : Number(v).toFixed(2)}
                         </p>
-                      </div>
-                      <div className="shrink-0 pl-1">
-                        <Link
-                          to={`/scanners/${getDefaultScannerIdForIndicator(indicator, r.symbol)}`}
-                          className="text-primary/80"
-                          aria-label={`Open scanner for ${r.symbol}`}
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </Link>
                       </div>
                     </div>
                   );
@@ -900,20 +891,5 @@ function PriceFilter({
       )}
     </div>
   );
-}
-
-// We only have scanner detail pages for pre-built scanners, so we map quick types to a relevant one.
-function getDefaultScannerIdForIndicator(ind: QuickIndicator, _symbol: string) {
-  switch (ind) {
-    case "rsi":
-      return "intraday-rsi-oversold";
-    case "ema":
-      return "moving-average-bounce";
-    case "macd":
-      return "golden-crossover";
-    case "price":
-    default:
-      return "gap-up-opening";
-  }
 }
 
