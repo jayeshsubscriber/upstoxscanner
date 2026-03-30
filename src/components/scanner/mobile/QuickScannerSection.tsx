@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { ConditionState, QueryState, ScanResultRow } from "@/types/screener";
 import { runCustomScan } from "@/lib/customScanRunner";
 import { cn } from "@/lib/utils";
@@ -534,6 +534,12 @@ const TECHNICAL_SECTIONS: Array<{ title: string; items: string[] }> = [
     ],
   },
 ];
+
+function getFlatPickerItemsForGroup(group: string): string[] {
+  if (group === "Technicals") return TECHNICAL_SECTIONS.flatMap((s) => s.items);
+  if (group === "Income & Growth") return INCOME_GROWTH_SECTIONS.flatMap((s) => s.items);
+  return PICKER_ITEMS[group] ?? [];
+}
 
 const DEFAULT_VALUATION_CRITERIA: ValuationCriteria = {
   mode: "higher_than_industry",
@@ -1336,6 +1342,29 @@ export function QuickScannerSection() {
     return [{ title: "", items }];
   }, [catalogGroup, catalogSearch]);
 
+  /** Section headers + rows match Technicals list pattern (bold subheads, padded rows, ›). */
+  const catalogTechnicalStyle =
+    catalogGroup === "Technicals" || catalogGroup === "Income & Growth";
+
+  const isCatalogGlobalSearch = catalogSearch.trim().length > 0;
+
+  const globalCatalogSearchSections = useMemo(() => {
+    const q = catalogSearch.trim().toLowerCase();
+    if (!q) return [];
+    const sections: { category: string; items: string[] }[] = [];
+    for (const group of PICKER_GROUPS) {
+      const raw = getFlatPickerItemsForGroup(group).filter((v) => v.toLowerCase().includes(q));
+      const seen = new Set<string>();
+      const items = raw.filter((v) => {
+        if (seen.has(v)) return false;
+        seen.add(v);
+        return true;
+      });
+      if (items.length > 0) sections.push({ category: group, items });
+    }
+    return sections;
+  }, [catalogSearch]);
+
   function getQuickTabLabel(tab: { key: QuickIndicator; label: string }) {
     if (tab.key === "ema") return `EMA(${emaPeriod})`;
     if (tab.key === "rsi") return `RSI(${rsiPeriod})`;
@@ -1371,15 +1400,15 @@ export function QuickScannerSection() {
     return `${base} · ${op} ${bench}`;
   }
 
-  function handleCatalogItemClick(item: string) {
+  function handleCatalogItemClick(item: string, group: string = catalogGroup) {
     // For app scanner copy: selected fundamental indicators become additional quick filters.
-    if (catalogGroup === "Candlesticks") {
+    if (group === "Candlesticks") {
       setCandlestickFilters((prev) => (prev.includes(item) ? prev : [...prev, item]));
       setCatalogOpen(false);
       openCandlestickCriteria(item);
       return;
     }
-    if (catalogGroup === "Technicals") {
+    if (group === "Technicals") {
       setTechnicalFilters((prev) => (prev.includes(item) ? prev : [...prev, item]));
       setActiveTechnicalFilter(item);
       setCatalogOpen(false);
@@ -1387,12 +1416,12 @@ export function QuickScannerSection() {
       return;
     }
     if (
-      catalogGroup === "Valuation" ||
-      catalogGroup === "Financial Ratios" ||
-      catalogGroup === "Profitability" ||
-      catalogGroup === "Cash Flow" ||
-      catalogGroup === "Volume & Delivery" ||
-      catalogGroup === "Shareholding"
+      group === "Valuation" ||
+      group === "Financial Ratios" ||
+      group === "Profitability" ||
+      group === "Cash Flow" ||
+      group === "Volume & Delivery" ||
+      group === "Shareholding"
     ) {
       setValuationFilters((prev) => (prev.includes(item) ? prev : [...prev, item]));
       setCatalogOpen(false);
@@ -1401,13 +1430,13 @@ export function QuickScannerSection() {
       openValuationCriteria(item);
       return;
     }
-    if (catalogGroup === "Income & Growth") {
+    if (group === "Income & Growth") {
       setIncomeGrowthFilters((prev) => (prev.includes(item) ? prev : [...prev, item]));
       setCatalogOpen(false);
       openIncomeGrowthCriteria(item);
       return;
     }
-    if (catalogGroup === "Balance Sheet") {
+    if (group === "Balance Sheet") {
       setBalanceSheetFilters((prev) => (prev.includes(item) ? prev : [...prev, item]));
       setCatalogOpen(false);
       openBalanceSheetCriteria(item);
@@ -1951,94 +1980,136 @@ export function QuickScannerSection() {
       </Dialog>
 
       {/* App scanners only: copied indicator picker (delinked from /diy) */}
-      <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}>
-        <DialogContent className="!p-0 !gap-0 !inset-0 !left-0 !top-0 !bottom-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !h-[100dvh] !max-h-[100dvh] overflow-hidden border-0 rounded-none [&>button]:hidden">
+      <Dialog
+        open={catalogOpen}
+        onOpenChange={(open) => {
+          setCatalogOpen(open);
+          if (!open) setCatalogSearch("");
+        }}
+      >
+        <DialogContent
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className="!p-0 !gap-0 !inset-0 !left-0 !top-0 !bottom-0 !translate-x-0 !translate-y-0 !w-screen !max-w-none !h-[100dvh] !max-h-[100dvh] overflow-hidden border-0 rounded-none [&>button]:hidden"
+        >
           <div className="h-[100dvh] flex flex-col bg-white overflow-hidden">
-            <div className="h-[52px] px-3 border-b border-[#E1E1E1] flex items-center gap-2">
-              <div className="text-[14px] font-semibold text-[#262626] whitespace-nowrap shrink-0">Condition type</div>
-              <span className="text-[#777777]">·</span>
-              <div className="text-[14px] font-semibold text-[#262626] whitespace-nowrap shrink-0">Select Indicator</div>
-              <div className="ml-auto relative min-w-0">
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#777777]" />
-                <Input
-                  value={catalogSearch}
-                  onChange={(e) => setCatalogSearch(e.target.value)}
-                  placeholder="Search for indicator..."
-                  className="h-10 w-[108px] pl-8 border-[#542087] focus-visible:ring-[#542087]"
-                />
+            <div className="shrink-0 border-b border-[#E1E1E1]">
+              <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
+                <DialogTitle className="text-base font-semibold text-[#262626] p-0 m-0 text-left">
+                  Add filters
+                </DialogTitle>
+                <DialogClose asChild>
+                  <button
+                    type="button"
+                    className="shrink-0 text-[#777777] p-1"
+                    aria-label="Close indicator picker"
+                  >
+                    <X size={16} />
+                  </button>
+                </DialogClose>
               </div>
-              <DialogClose asChild>
-                <button type="button" className="text-[#777777]" aria-label="Close indicator picker">
-                  <X size={16} />
-                </button>
-              </DialogClose>
+              <div className="px-3 pb-3">
+                <div className="relative min-w-0">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#777777] pointer-events-none" />
+                  <Input
+                    value={catalogSearch}
+                    onChange={(e) => setCatalogSearch(e.target.value)}
+                    placeholder="Search all indicators…"
+                    className="h-10 w-full pl-8 pr-3 border-[#542087] focus-visible:ring-[#542087]"
+                    aria-label="Search indicators across all categories"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex-1 min-h-0 flex overflow-hidden">
-              <div className="w-[40%] border-r border-[#E1E1E1] overflow-y-auto overscroll-contain">
-                {PICKER_GROUPS.map((group) => {
-                  const active = group === catalogGroup;
-                  return (
-                    <button
-                      key={group}
-                      type="button"
-                      onClick={() => setCatalogGroup(group)}
-                      className={cn(
-                        "w-full h-10 px-4 flex items-center justify-between text-left text-[14px] border-b border-[#F5F5F5]",
-                        active ? "bg-[#F5F2F9] text-[#542087] font-medium" : "bg-white text-[#262626] font-normal"
-                      )}
-                    >
-                      <span className="truncate">{group}</span>
-                      <ChevronRight size={12} className="text-[#777777]" />
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-                <div
-                  className={cn(
-                    "text-[#262626]",
-                    catalogGroup === "Technicals" ? "px-3 pt-2 pb-1 text-sm font-semibold" : "px-4 py-3 text-[18px] leading-6 font-semibold"
-                  )}
-                >
-                  {catalogGroup}
-                </div>
-                {catalogSections.map((section, sectionIdx) => (
-                  <div key={`${section.title}-${sectionIdx}`} className={catalogGroup === "Technicals" ? "mb-1" : ""}>
-                    {section.title ? (
-                      <div
-                        className={cn(
-                          catalogGroup === "Technicals"
-                            ? "px-3 py-2 text-xs font-bold text-[#262626]"
-                            : "px-4 py-2 text-[11px] font-semibold tracking-wide uppercase text-[#777777] bg-[#FAFAFA] border-y border-[#F1F1F1]"
-                        )}
-                      >
-                        {section.title}
-                      </div>
-                    ) : null}
-                    {section.items.map((item) => (
+              {!isCatalogGlobalSearch ? (
+                <div className="w-[40%] border-r border-[#E1E1E1] overflow-y-auto overscroll-contain">
+                  {PICKER_GROUPS.map((group) => {
+                    const active = group === catalogGroup;
+                    return (
                       <button
-                        key={item}
+                        key={group}
                         type="button"
-                        onClick={() => handleCatalogItemClick(item)}
+                        onClick={() => setCatalogGroup(group)}
                         className={cn(
-                          "w-full flex items-center justify-between text-left transition-colors",
-                          catalogGroup === "Technicals"
-                            ? "px-3 py-2.5 text-sm rounded-lg text-[#262626] hover:bg-primary/5 mb-0.5"
-                            : "h-10 px-4 text-[14px] leading-5 text-[#262626] border-b border-[#F7F7F7]"
+                          "w-full h-10 px-4 flex items-center justify-between text-left text-[14px] border-b border-[#F5F5F5]",
+                          active ? "bg-[#F5F2F9] text-[#542087] font-medium" : "bg-white text-[#262626] font-normal"
                         )}
                       >
-                        <span className={catalogGroup === "Technicals" ? "text-sm" : "text-[14px] leading-5"}>{item}</span>
-                        {catalogGroup === "Technicals" ? (
-                          <span className="text-muted-foreground shrink-0 text-sm leading-none">›</span>
-                        ) : (
-                          <ChevronRight size={14} className="text-[#777777] shrink-0" />
-                        )}
+                        <span className="truncate">{group}</span>
+                        <ChevronRight size={12} className="text-[#777777]" />
                       </button>
-                    ))}
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              <div
+                className={cn(
+                  "flex-1 min-h-0 overflow-y-auto overscroll-contain min-w-0",
+                  isCatalogGlobalSearch ? "pt-2 px-1" : catalogTechnicalStyle ? "pt-2" : "pt-3"
+                )}
+              >
+                {isCatalogGlobalSearch ? (
+                  globalCatalogSearchSections.length === 0 ? (
+                    <p className="px-3 py-6 text-sm text-muted-foreground text-center">
+                      No indicators match your search.
+                    </p>
+                  ) : (
+                    globalCatalogSearchSections.map((block) => (
+                      <div key={block.category} className="mb-2">
+                        <div className="px-3 py-2 text-xs font-bold text-[#262626]">{block.category}</div>
+                        {block.items.map((item) => (
+                          <button
+                            key={`${block.category}-${item}`}
+                            type="button"
+                            onClick={() => handleCatalogItemClick(item, block.category)}
+                            className="w-full flex items-center justify-between text-left transition-colors px-3 py-2.5 text-sm rounded-lg text-[#262626] hover:bg-primary/5 mb-0.5"
+                          >
+                            <span className="text-sm">{item}</span>
+                            <span className="text-muted-foreground shrink-0 text-sm leading-none">›</span>
+                          </button>
+                        ))}
+                      </div>
+                    ))
+                  )
+                ) : (
+                  catalogSections.map((section, sectionIdx) => (
+                    <div key={`${section.title}-${sectionIdx}`} className={catalogTechnicalStyle ? "mb-1" : ""}>
+                      {section.title ? (
+                        <div
+                          className={cn(
+                            catalogTechnicalStyle
+                              ? "px-3 py-2 text-[16px] font-bold leading-5 text-[#262626]"
+                              : "px-4 py-2 text-[11px] font-semibold tracking-wide uppercase text-[#777777] bg-[#FAFAFA] border-y border-[#F1F1F1]"
+                          )}
+                        >
+                          {section.title}
+                        </div>
+                      ) : null}
+                      {section.items.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => handleCatalogItemClick(item)}
+                          className={cn(
+                            "w-full flex items-center justify-between text-left transition-colors",
+                            catalogTechnicalStyle
+                              ? "px-3 py-2.5 text-sm rounded-lg text-[#262626] hover:bg-primary/5 mb-0.5"
+                              : "h-10 px-4 text-[14px] leading-5 text-[#262626] border-b border-[#F7F7F7]"
+                          )}
+                        >
+                          <span className={catalogTechnicalStyle ? "text-sm" : "text-[14px] leading-5"}>{item}</span>
+                          {catalogTechnicalStyle ? (
+                            <span className="text-muted-foreground shrink-0 text-sm leading-none">›</span>
+                          ) : (
+                            <ChevronRight size={14} className="text-[#777777] shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
