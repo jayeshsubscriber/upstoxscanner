@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -77,6 +77,111 @@ function getIndicatorValueHint(indicatorId: string) {
   }
 }
 
+const DEMO_SCRIPTS: { symbol: string; name: string; ltp: number; change1d: number }[] = [
+  { symbol: "JSWSTEEL", name: "JSW Steel", ltp: 432.31, change1d: 4.5 },
+  { symbol: "IDFCBANK", name: "IDFC First Bank", ltp: 331.51, change1d: 4.5 },
+  { symbol: "HDFCBANK", name: "HDFC Bank", ltp: 412.34, change1d: 4.5 },
+  { symbol: "YESBANK", name: "Yes Bank", ltp: 7423.21, change1d: 4.5 },
+  { symbol: "ICICIBANK", name: "ICICI Bank", ltp: 101.34, change1d: -0.2 },
+];
+
+function getDemoIndicatorColumnConfig({
+  indicator,
+  rsiPeriod,
+  emaPeriod,
+  macdFast,
+  macdSlow,
+  macdSignal,
+}: {
+  indicator: QuickIndicator;
+  rsiPeriod: number;
+  emaPeriod: number;
+  macdFast: number;
+  macdSlow: number;
+  macdSignal: number;
+}): { key: string; label: string } {
+  switch (indicator) {
+    case "rsi":
+      return { key: `rsi_${rsiPeriod}`, label: `RSI(${rsiPeriod})` };
+    case "ema":
+      return { key: `ema_${emaPeriod}`, label: `EMA(${emaPeriod})` };
+    case "macd":
+      return { key: `macd_line_${macdFast}_${macdSlow}_${macdSignal}`, label: `MACD Line(${macdFast},${macdSlow},${macdSignal})` };
+    case "price":
+    default:
+      return { key: "change_1d_pct", label: "1D Change %" };
+  }
+}
+
+function buildDemoScanResults({
+  indicator,
+  rsiMode,
+  rsiMin,
+  rsiMax,
+  emaSide,
+  macdSide,
+  priceMode,
+  priceMin,
+  priceMax,
+  rsiPeriod,
+  emaPeriod,
+  macdFast,
+  macdSlow,
+  macdSignal,
+}: {
+  indicator: QuickIndicator;
+  rsiMode: RsiMode;
+  rsiMin: number;
+  rsiMax: number;
+  emaSide: EmaSide;
+  macdSide: MacdSide;
+  priceMode: PriceMode;
+  priceMin: number;
+  priceMax: number;
+  rsiPeriod: number;
+  emaPeriod: number;
+  macdFast: number;
+  macdSlow: number;
+  macdSignal: number;
+}): ScanResultRow[] {
+  const col = getDemoIndicatorColumnConfig({
+    indicator,
+    rsiPeriod,
+    emaPeriod,
+    macdFast,
+    macdSlow,
+    macdSignal,
+  });
+
+  return DEMO_SCRIPTS.map((s, idx) => {
+    let v = 0;
+    if (indicator === "rsi") {
+      if (rsiMode === "above") v = 72 + idx * 2;
+      else if (rsiMode === "below") v = 25 + idx * 3;
+      else v = rsiMin + (idx % 3) * ((rsiMax - rsiMin) / 4);
+    } else if (indicator === "ema") {
+      const mult = emaSide === "above" ? 1.01 : 0.99;
+      v = s.ltp * mult;
+    } else if (indicator === "macd") {
+      v = macdSide === "bullish" ? 0.6 + idx * 0.12 : -0.55 - idx * 0.1;
+    } else {
+      if (priceMode === "above") v = priceMin + idx * 0.6;
+      else if (priceMode === "below") v = -(priceMin + idx * 0.6);
+      else v = priceMin + idx * ((priceMax - priceMin) / 4);
+    }
+
+    return {
+      symbol: s.symbol,
+      name: s.name,
+      close: s.ltp,
+      change1d: s.change1d,
+      volume: 0,
+      matchedGroups: 1,
+      indicatorValues: { [col.key]: v },
+    };
+  });
+}
+
 export function QuickScannerSection() {
   const [indicator, setIndicator] = useState<QuickIndicator>("rsi");
 
@@ -107,6 +212,7 @@ export function QuickScannerSection() {
 
   const [filterOpen, setFilterOpen] = useState(false);
 
+  const [isDemo, setIsDemo] = useState(true);
   const [results, setResults] = useState<ScanResultRow[]>([]);
   const [matchedHint, setMatchedHint] = useState<string>("Apply to see matches");
   const [indicatorColumnKey, setIndicatorColumnKey] = useState<string | null>(null);
@@ -115,6 +221,54 @@ export function QuickScannerSection() {
   const [isApplying, setIsApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const activeFilterCount = 1;
+
+  useEffect(() => {
+    if (!isDemo) return;
+    const demo = buildDemoScanResults({
+      indicator,
+      rsiMode,
+      rsiMin,
+      rsiMax,
+      emaSide,
+      macdSide,
+      priceMode,
+      priceMin,
+      priceMax,
+      rsiPeriod,
+      emaPeriod,
+      macdFast,
+      macdSlow,
+      macdSignal,
+    });
+    const colCfg = getDemoIndicatorColumnConfig({
+      indicator,
+      rsiPeriod,
+      emaPeriod,
+      macdFast,
+      macdSlow,
+      macdSignal,
+    });
+    setResults(demo);
+    setMatchedHint("Demo matches");
+    setIndicatorColumnKey(colCfg.key);
+    setIndicatorColumnLabel(colCfg.label);
+  }, [
+    isDemo,
+    indicator,
+    rsiMode,
+    rsiMin,
+    rsiMax,
+    emaSide,
+    macdSide,
+    priceMode,
+    priceMin,
+    priceMax,
+    rsiPeriod,
+    emaPeriod,
+    macdFast,
+    macdSlow,
+    macdSignal,
+  ]);
 
   const activeInterval = useMemo(() => {
     const all = INTERVALS;
@@ -146,6 +300,7 @@ export function QuickScannerSection() {
 
   function openFor(ind: QuickIndicator) {
     setIndicator(ind);
+    setIsDemo(true);
     setFilterOpen(true);
   }
 
@@ -163,6 +318,7 @@ export function QuickScannerSection() {
     setPriceMin(1);
     setPriceMax(5);
     setPriceIntervalId("15m");
+    setIsDemo(true);
     setResults([]);
     setIndicatorColumnKey(null);
     setIndicatorColumnLabel("");
@@ -303,6 +459,7 @@ export function QuickScannerSection() {
 
   async function apply() {
     setApplyError(null);
+    setIsDemo(false);
     setIsApplying(true);
     try {
       const { query, displayIndicatorId } = buildQuery();
@@ -331,7 +488,7 @@ export function QuickScannerSection() {
 
   return (
     <div className="mb-5" aria-label="Quick scanner">
-      <Card className="border-border/60 bg-white rounded-2xl shadow-[0_2px_8px_rgba(158,144,99,0.16)]">
+      <Card className="w-full max-w-[360px] border-[#F2F0E5] bg-white rounded-2xl shadow-[0_2px_8px_rgba(158,144,99,0.16)]">
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2">
@@ -339,7 +496,7 @@ export function QuickScannerSection() {
                 <Zap className="w-4 h-4 text-primary" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-bold text-foreground">Quick Screener</p>
+                <p className="text-[16px] font-semibold text-foreground">Quick Screener</p>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
                   Mini filter for beginners: one idea, fast matches.
                 </p>
@@ -348,7 +505,7 @@ export function QuickScannerSection() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 px-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+              className="h-8 px-0 text-xs font-semibold text-[#777777] hover:text-[#262626]"
               onClick={clearAll}
               disabled={isApplying}
             >
@@ -377,10 +534,10 @@ export function QuickScannerSection() {
                 type="button"
                 onClick={() => openFor(t.key)}
                 className={cn(
-                  "shrink-0 h-9 px-3.5 rounded-full border text-sm font-medium whitespace-nowrap transition-colors",
+                  "shrink-0 h-7 px-3 rounded-[6px] border text-[12px] font-semibold whitespace-nowrap transition-colors",
                   indicator === t.key
-                    ? "bg-primary/5 border-primary text-primary"
-                    : "bg-white border-border/70 text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+                    ? "bg-[#FBF8FD] border-[#542087] text-[#542087]"
+                    : "bg-white border-[#E1E1E1] text-[#262626] hover:bg-muted/30"
                 )}
               >
                 {t.label}
@@ -390,7 +547,7 @@ export function QuickScannerSection() {
             <button
               type="button"
               onClick={() => setFilterOpen(true)}
-              className="shrink-0 h-9 px-3.5 rounded-full border border-dashed border-border text-sm font-medium text-muted-foreground whitespace-nowrap hover:bg-muted/40 transition-colors"
+              className="shrink-0 h-7 px-3 rounded-[6px] border border-dashed border-[#E1E1E1] text-[12px] font-semibold text-[#777777] whitespace-nowrap hover:bg-muted/30 transition-colors"
             >
               + Add filter
             </button>
@@ -398,8 +555,8 @@ export function QuickScannerSection() {
 
           <div className="flex items-center justify-between gap-2 mb-3">
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">CURRENT FILTER</p>
-              <p className="text-sm font-semibold text-foreground truncate">{indicatorConfigSummary}</p>
+              <p className="text-[12px] font-bold text-[#777777] uppercase tracking-wider">CURRENT FILTER</p>
+              <p className="text-[14px] font-bold text-foreground truncate">{indicatorConfigSummary}</p>
               {activeInterval.note && (
                 <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-0.5 mt-1">
                   Note: {activeInterval.note}
@@ -408,7 +565,7 @@ export function QuickScannerSection() {
             </div>
             <Button
               onClick={() => setFilterOpen(true)}
-              className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 h-10 rounded-xl px-5"
+              className="shrink-0 bg-[#542087] text-white hover:bg-[#4A1D79] h-10 rounded-[6px] px-5"
               size="sm"
               type="button"
               disabled={isApplying}
@@ -418,8 +575,8 @@ export function QuickScannerSection() {
           </div>
 
           {/* Results table */}
-          <div className="rounded-xl border border-border/60 bg-background overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-white">
+          <div className="rounded-xl border border-[#F1F1F1] bg-white overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-[#F1F1F1] bg-white">
               <div className="w-1/2 text-[10px] font-bold text-muted-foreground">Scrip</div>
               <div className="w-1/4 text-right text-[10px] font-bold text-muted-foreground">LTP</div>
               <div className="w-1/4 text-right text-[10px] font-bold text-muted-foreground">{indicatorColumnLabel || "Value"}</div>
@@ -428,30 +585,44 @@ export function QuickScannerSection() {
               <div className="flex items-center justify-center p-6 text-muted-foreground gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" /> Running quick scan...
               </div>
-            ) : results.length === 0 ? (
+            ) : !isDemo && results.length === 0 ? (
               <div className="p-4 text-sm text-muted-foreground">{matchedHint}</div>
             ) : (
-              <div className="divide-y divide-border/30">
+              <div className="divide-y divide-[#F1F1F1] bg-white">
                 {results.map((r) => {
                   const v = indicatorColumnKey ? r.indicatorValues[indicatorColumnKey] ?? 0 : 0;
                   const showCurrency = indicatorColumnLabel.toLowerCase().includes("ema") || indicatorColumnLabel.toLowerCase().includes("price");
                   const showAsPct = indicatorColumnLabel.toLowerCase().includes("change");
                   return (
-                    <div key={r.symbol} className="flex items-center gap-2 px-3 py-3 hover:bg-muted/20 transition-colors">
-                      <div className="w-1/2 min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{r.symbol}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">{r.name}</p>
+                    <div
+                      key={r.symbol}
+                      className="flex items-center gap-2 px-3 h-[52px] hover:bg-muted/20 transition-colors"
+                    >
+                      <div className="w-1/2 min-w-0 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-[6px] bg-[#FBF8FD] border border-[#F1F1F1] flex items-center justify-center shrink-0">
+                          <span className="text-[10px] font-bold text-primary">{r.symbol.slice(0, 2)}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{r.symbol}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{r.name}</p>
+                        </div>
                       </div>
                       <div className="w-1/4 text-right">
-                        <p className="text-sm font-semibold tabular-nums text-foreground">{formatInr(r.close)}</p>
+                        <p className="text-sm font-semibold tabular-nums text-foreground">
+                          {formatInr(r.close)}
+                        </p>
                       </div>
                       <div className="w-1/4 text-right">
                         <p className="text-sm font-semibold tabular-nums text-foreground">
                           {showAsPct ? formatMaybePct(Number(v)) : showCurrency ? formatInr(Number(v)) : Number(v).toFixed(2)}
                         </p>
                       </div>
-                      <div className="shrink-0">
-                        <Link to={`/scanners/${getDefaultScannerIdForIndicator(indicator, r.symbol)}`} className="text-primary/80">
+                      <div className="shrink-0 pl-1">
+                        <Link
+                          to={`/scanners/${getDefaultScannerIdForIndicator(indicator, r.symbol)}`}
+                          className="text-primary/80"
+                          aria-label={`Open scanner for ${r.symbol}`}
+                        >
                           <ChevronRight className="w-4 h-4" />
                         </Link>
                       </div>

@@ -22,7 +22,6 @@ import {
 // Components
 import { MarketPulseBar } from "@/components/scanner/mobile/MarketPulseBar";
 import { PersonaFilterChips } from "@/components/scanner/mobile/PersonaFilterChips";
-import { QuickScannerSection } from "@/components/scanner/mobile/QuickScannerSection";
 import { HeroOpportunityCard } from "@/components/scanner/mobile/HeroOpportunityCard";
 import { OpportunityFeed } from "@/components/scanner/mobile/OpportunityFeed";
 import { ToolkitSection } from "@/components/scanner/mobile/ToolkitSection";
@@ -74,11 +73,6 @@ export function MobileScannerPage() {
         <div className="pt-4 pb-3">
           <PersonaFilterChips value={persona} onChange={setPersona} />
         </div>
-
-        {/* Quick Scanner — mini screener */}
-        <section className="mb-5" aria-label="Quick scanner">
-          <QuickScannerSection />
-        </section>
 
         {/* Layer 1: Hero — The One Trade Right Now */}
         <section className="mb-5" aria-label="Top opportunity">

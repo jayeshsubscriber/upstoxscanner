@@ -225,8 +225,8 @@ function LiveSignalCard({ signal }: { signal: LiveMarketSignal }) {
         </div>
 
         {/* Indicator (strategy) + sentiment label */}
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <p className="text-sm font-semibold text-primary leading-snug min-w-0 flex-1">{signal.indicator}</p>
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <p className="text-sm font-semibold text-primary leading-snug">{signal.indicator}</p>
           <SentimentBadge sentiment={signal.sentiment} />
         </div>
 
