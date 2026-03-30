@@ -488,7 +488,7 @@ export function QuickScannerSection() {
 
   return (
     <div className="mb-5" aria-label="Quick scanner">
-      <Card className="w-full max-w-[360px] border-[#F2F0E5] bg-white rounded-2xl shadow-[0_2px_8px_rgba(158,144,99,0.16)]">
+      <Card className="w-full max-w-[360px] bg-white rounded-2xl shadow-[0_2px_8px_rgba(158,144,99,0.16)]">
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2">
@@ -574,13 +574,8 @@ export function QuickScannerSection() {
             </Button>
           </div>
 
-          {/* Results table */}
-          <div className="rounded-xl border border-[#F1F1F1] bg-white overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-[#F1F1F1] bg-white">
-              <div className="w-1/2 text-[10px] font-bold text-muted-foreground">Scrip</div>
-              <div className="w-1/4 text-right text-[10px] font-bold text-muted-foreground">LTP</div>
-              <div className="w-1/4 text-right text-[10px] font-bold text-muted-foreground">{indicatorColumnLabel || "Value"}</div>
-            </div>
+          {/* Results list (no outer table border to match Intraday layout) */}
+          <div className="bg-white">
             {isApplying ? (
               <div className="flex items-center justify-center p-6 text-muted-foreground gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" /> Running quick scan...
@@ -596,10 +591,10 @@ export function QuickScannerSection() {
                   return (
                     <div
                       key={r.symbol}
-                      className="flex items-center gap-2 px-3 h-[52px] hover:bg-muted/20 transition-colors"
+                      className="flex items-center gap-2 px-3 h-[52px] transition-colors"
                     >
                       <div className="w-1/2 min-w-0 flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-[6px] bg-[#FBF8FD] border border-[#F1F1F1] flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-[6px] bg-[#FBF8FD] flex items-center justify-center shrink-0">
                           <span className="text-[10px] font-bold text-primary">{r.symbol.slice(0, 2)}</span>
                         </div>
                         <div className="min-w-0">
