@@ -26,6 +26,10 @@ import {
   Target,
   Lock,
   Minus,
+  CandlestickChart,
+  CalendarClock,
+  BriefcaseBusiness,
+  Landmark,
 } from "lucide-react";
 import {
   PRE_BUILT_SCANNERS,
@@ -196,12 +200,7 @@ function LiveSignalCard({ signal }: { signal: LiveMarketSignal }) {
 
   return (
     <Card
-      className={cn(
-        "overflow-hidden border bg-white shadow-sm transition-shadow hover:shadow-md",
-        signal.sentiment === "bullish" && "border-l-[3px] border-l-emerald-500",
-        signal.sentiment === "bearish" && "border-l-[3px] border-l-red-500",
-        signal.sentiment === "neutral" && "border-l-[3px] border-l-slate-400"
-      )}
+      className="overflow-hidden border bg-white shadow-sm transition-shadow hover:shadow-md"
     >
       <CardContent className="p-3">
         {/* Header: scrip on left, LTP+change on right */}
@@ -293,6 +292,37 @@ const TIME_BUCKETS = [
   { id: "live", label: "Live session", icon: Radio, hint: "Intraday", match: (sub: string) => /momentum|vwap|volume|intraday/i.test(sub) },
   { id: "eod", label: "EOD / BTST", icon: Sunset, hint: "Close & overnight", match: (sub: string) => /closing|btst|3:25|nr7/i.test(sub) },
 ];
+
+const OPPORTUNITY_TRACKS = [
+  {
+    key: "intraday",
+    label: "Intraday",
+    desc: "Same-day momentum setups.",
+    scans: "5 Scans",
+    icon: CandlestickChart,
+  },
+  {
+    key: "swing",
+    label: "Swing",
+    desc: "Multi-day breakouts.",
+    scans: "8 Scans",
+    icon: CalendarClock,
+  },
+  {
+    key: "positional",
+    label: "Positional",
+    desc: "Weeks-based trend holds.",
+    scans: "6 Scans",
+    icon: BriefcaseBusiness,
+  },
+  {
+    key: "long-term",
+    label: "Long Term Investing",
+    desc: "Long-horizon compounding picks.",
+    scans: "10 Scans",
+    icon: Landmark,
+  },
+] as const;
 
 export function AppScannersHubPage() {
   const [persona, setPersona] = useState<"all" | ScannerPersona>("all");
@@ -390,32 +420,36 @@ export function AppScannersHubPage() {
         <QuickScannerSection />
 
         {/* Live market signals — vertical stack, dense card (mobile app) */}
-        <section className="mb-6" aria-label="Live market signals">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-60" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+        <div className="mb-6 -mx-4 bg-white -mt-5 relative">
+          {/* Quick Screener -> Live Signals boundary gradient */}
+          <div className="absolute top-0 left-0 right-0 h-[4px] bg-gradient-to-r from-[#542087]/0 via-[#542087]/20 to-[#542087]/0" />
+          <section className="px-4 pt-5 pb-4" aria-label="Live market signals">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-60" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                </span>
+                <h2 className="text-[16px] font-semibold text-foreground truncate">Live market signals</h2>
+              </div>
+              <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">
+                Mock · Demo
               </span>
-              <h2 className="text-sm font-semibold text-foreground truncate">Live market signals</h2>
             </div>
-            <span className="text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">
-              Mock · Demo
-            </span>
-          </div>
-          <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
-            Live matches from your scanners — LTP, sentiment, and a quick read before you trade.
-          </p>
-          <div className="space-y-4">
-            {LIVE_MARKET_SIGNALS.map((signal) => (
-              <LiveSignalCard key={signal.id} signal={signal} />
-            ))}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
-            Trade opens the scanner workflow; confirm price and risk in the order screen. Signals refresh
-            while the market is open.
-          </p>
-        </section>
+            <p className="text-[10px] text-muted-foreground mb-3 leading-relaxed">
+              Live matches from your scanners — LTP, sentiment, and a quick read before you trade.
+            </p>
+            <div className="space-y-4">
+              {LIVE_MARKET_SIGNALS.map((signal) => (
+                <LiveSignalCard key={signal.id} signal={signal} />
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-3 leading-relaxed">
+              Trade opens the scanner workflow; confirm price and risk in the order screen. Signals refresh
+              while the market is open.
+            </p>
+          </section>
+        </div>
 
         {/* Time-of-day buckets — secondary filter */}
         <section className="mb-6" aria-label="When do you trade">
@@ -513,6 +547,32 @@ export function AppScannersHubPage() {
                 </div>
               </Link>
             ))}
+          </div>
+        </section>
+
+        <section className="mb-6" aria-label="Discover opportunities">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-foreground">Discover Opportunities</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {OPPORTUNITY_TRACKS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.key}
+                  className="relative rounded-xl border border-border/80 bg-white p-3 shadow-[0_1px_4px_rgba(0,0,0,0.05)]"
+                >
+                  <span className="absolute top-3 right-3 inline-flex items-center rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                    {item.scans}
+                  </span>
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-2">
+                    <Icon className="w-4 h-4 text-primary" />
+                  </div>
+                  <p className="text-[15px] leading-5 font-semibold text-foreground">{item.label}</p>
+                  <p className="text-[11px] leading-4 text-muted-foreground mt-1 line-clamp-1">{item.desc}</p>
+                </div>
+              );
+            })}
           </div>
         </section>
 
