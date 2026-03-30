@@ -283,21 +283,6 @@ export function QuickScannerSection() {
     return all.find((i) => i.id === intervalId) ?? all[2];
   }, [indicator, emaIntervalId, macdIntervalId, priceIntervalId, rsiIntervalId]);
 
-  const indicatorConfigSummary = useMemo(() => {
-    if (indicator === "rsi") {
-      if (rsiMode === "above") return `RSI(${rsiPeriod}) above ${rsiMax}`;
-      if (rsiMode === "below") return `RSI(${rsiPeriod}) below ${rsiMin}`;
-      return `RSI(${rsiPeriod}) between ${rsiMin} and ${rsiMax}`;
-    }
-    if (indicator === "ema") return `Close ${emaSide === "above" ? ">" : "<"} EMA(${emaPeriod})`;
-    if (indicator === "macd")
-      return `MACD line ${macdSide === "bullish" ? ">" : "<"} signal (MACD ${macdFast},${macdSlow},${macdSignal})`;
-    if (priceMode === "above") return `1D change % above ${priceMin}%`;
-    if (priceMode === "below") return `1D change % below ${priceMin}%`;
-    return `1D change % between ${priceMin}% and ${priceMax}%`;
-    return `Quick filter`;
-  }, [indicator, emaPeriod, emaSide, macdFast, macdSide, macdSignal, macdSlow, priceMax, priceMin, priceMode, rsiMax, rsiMin, rsiMode, rsiPeriod]);
-
   function openFor(ind: QuickIndicator) {
     setIndicator(ind);
     setIsDemo(true);
@@ -551,27 +536,6 @@ export function QuickScannerSection() {
             >
               + Add filter
             </button>
-          </div>
-
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="min-w-0">
-              <p className="text-[12px] font-bold text-[#777777] uppercase tracking-wider">CURRENT FILTER</p>
-              <p className="text-[14px] font-bold text-foreground truncate">{indicatorConfigSummary}</p>
-              {activeInterval.note && (
-                <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-0.5 mt-1">
-                  Note: {activeInterval.note}
-                </p>
-              )}
-            </div>
-            <Button
-              onClick={() => setFilterOpen(true)}
-              className="shrink-0 bg-[#542087] text-white hover:bg-[#4A1D79] h-10 rounded-[6px] px-5"
-              size="sm"
-              type="button"
-              disabled={isApplying}
-            >
-              Filters
-            </Button>
           </div>
 
           {/* Results list (no outer table border to match Intraday layout) */}
