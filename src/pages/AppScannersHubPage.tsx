@@ -36,6 +36,7 @@ import {
   type ScannerPersona,
 } from "@/data/mockData";
 import { cn } from "@/lib/utils";
+import { QuickScannerSection } from "@/components/scanner/mobile/QuickScannerSection";
 
 export type LiveSignalSentiment = "bullish" | "bearish" | "neutral";
 
@@ -203,27 +204,19 @@ function LiveSignalCard({ signal }: { signal: LiveMarketSignal }) {
       )}
     >
       <CardContent className="p-3">
-        {/* Scrip */}
-        <div className="flex items-start justify-between gap-2 mb-2">
+        {/* Header: scrip on left, LTP+change on right */}
+        <div className="flex items-start justify-between gap-3 mb-3">
           <div className="min-w-0 flex-1">
             <Link to={scannerHref} className="font-bold text-base text-foreground tracking-tight hover:text-primary">
               {signal.symbol}
             </Link>
             <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2 mt-0.5">{signal.companyName}</p>
           </div>
-        </div>
-
-        {/* LTP + change */}
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-3">
-          <div>
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">LTP</p>
-            <p className={cn("text-2xl font-bold tabular-nums tracking-tight leading-none", up ? "text-green-600" : "text-red-600")}>
+          <div className="text-right shrink-0 self-start">
+            <p className={cn("text-[14px] leading-5 font-medium tabular-nums tracking-tight", up ? "text-emerald-700" : "text-red-600")}>
               {formatInr(signal.ltp)}
             </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Change</p>
-            <p className={cn("text-[14px] font-semibold tabular-nums leading-tight", up ? "text-green-600" : "text-red-600")}>
+            <p className="mt-0.5 text-[12px] leading-4 font-normal tabular-nums text-muted-foreground">
               {up ? "+" : ""}
               {signal.changeAbs.toFixed(2)} ({up ? "+" : ""}
               {signal.changePct.toFixed(2)}%)
@@ -231,8 +224,11 @@ function LiveSignalCard({ signal }: { signal: LiveMarketSignal }) {
           </div>
         </div>
 
-        {/* Indicator (strategy) */}
-        <p className="text-sm font-semibold text-primary leading-snug mb-2">{signal.indicator}</p>
+        {/* Indicator (strategy) + sentiment label */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p className="text-sm font-semibold text-primary leading-snug min-w-0 flex-1">{signal.indicator}</p>
+          <SentimentBadge sentiment={signal.sentiment} />
+        </div>
 
         {/* Optional attribute */}
         {signal.attribute && (
@@ -245,13 +241,8 @@ function LiveSignalCard({ signal }: { signal: LiveMarketSignal }) {
         )}
 
         {/* One-liner insight */}
-        <div className="rounded-lg bg-muted/50 border border-border/60 px-3 py-2.5 mb-2">
-          <p className="text-[11px] text-foreground/90 leading-relaxed">{signal.oneLiner}</p>
-        </div>
-
-        {/* Sentiment tag (moved below message) */}
-        <div className="mb-3">
-          <SentimentBadge sentiment={signal.sentiment} />
+        <div className="rounded-[4px] bg-[#FBF8FD] border border-border/60 pt-1 pb-1 pr-1 pl-2 mb-2">
+          <p className="text-[10px] font-medium text-[#262626] leading-4">{signal.oneLiner}</p>
         </div>
 
         {/* Tags + detection time */}
@@ -394,6 +385,9 @@ export function AppScannersHubPage() {
             className="pl-10 h-11 rounded-xl border-border/80 bg-white shadow-sm"
           />
         </div>
+
+        {/* Quick Scanner — mini screener */}
+        <QuickScannerSection />
 
         {/* Live market signals — vertical stack, dense card (mobile app) */}
         <section className="mb-6" aria-label="Live market signals">

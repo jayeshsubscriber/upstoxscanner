@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import type { ConditionState, QueryState, ScanResultRow } from "@/types/screener";
 import { runCustomScan, extractIndicatorColumns } from "@/lib/customScanRunner";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Loader2, Zap } from "lucide-react";
+import { ChevronRight, Loader2, SlidersHorizontal, Zap } from "lucide-react";
 
 type QuickIndicator = "price" | "ema" | "rsi" | "macd";
 
@@ -114,6 +114,7 @@ export function QuickScannerSection() {
 
   const [isApplying, setIsApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const activeFilterCount = 1;
 
   const activeInterval = useMemo(() => {
     const all = INTERVALS;
@@ -330,8 +331,8 @@ export function QuickScannerSection() {
 
   return (
     <div className="mb-5" aria-label="Quick scanner">
-      <Card className="border-primary/15 bg-white shadow-sm">
-        <CardContent className="p-3">
+      <Card className="border-border/60 bg-white rounded-2xl shadow-[0_2px_8px_rgba(158,144,99,0.16)]">
+        <CardContent className="p-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -344,30 +345,60 @@ export function QuickScannerSection() {
                 </p>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={clearAll} disabled={isApplying}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-0 text-xs font-medium text-muted-foreground hover:text-foreground"
+              onClick={clearAll}
+              disabled={isApplying}
+            >
               Clear All
             </Button>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-2 -mx-3 px-3 scrollbar-none">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-3 px-3 scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setFilterOpen(true)}
+              className={cn(
+                "relative shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-foreground text-background border border-foreground/10 transition-colors",
+                activeFilterCount > 0 ? "" : "opacity-90"
+              )}
+            >
+              <SlidersHorizontal size={16} />
+              <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-background text-foreground text-[10px] font-bold flex items-center justify-center leading-none border border-border/60">
+                {activeFilterCount}
+              </span>
+            </button>
+
             {quickTabs.map((t) => (
               <button
                 key={t.key}
                 type="button"
                 onClick={() => openFor(t.key)}
                 className={cn(
-                  "shrink-0 rounded-xl border px-3 py-2 text-xs font-semibold transition-colors flex items-center gap-2",
-                  indicator === t.key ? "border-primary bg-primary/10 text-primary" : "border-border bg-background hover:border-primary/35"
+                  "shrink-0 h-9 px-3.5 rounded-full border text-sm font-medium whitespace-nowrap transition-colors",
+                  indicator === t.key
+                    ? "bg-primary/5 border-primary text-primary"
+                    : "bg-white border-border/70 text-muted-foreground hover:bg-muted/30 hover:text-foreground"
                 )}
               >
                 {t.label}
               </button>
             ))}
+
+            <button
+              type="button"
+              onClick={() => setFilterOpen(true)}
+              className="shrink-0 h-9 px-3.5 rounded-full border border-dashed border-border text-sm font-medium text-muted-foreground whitespace-nowrap hover:bg-muted/40 transition-colors"
+            >
+              + Add filter
+            </button>
           </div>
 
           <div className="flex items-center justify-between gap-2 mb-3">
             <div className="min-w-0">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Current filter</p>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">CURRENT FILTER</p>
               <p className="text-sm font-semibold text-foreground truncate">{indicatorConfigSummary}</p>
               {activeInterval.note && (
                 <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-0.5 mt-1">
@@ -377,7 +408,7 @@ export function QuickScannerSection() {
             </div>
             <Button
               onClick={() => setFilterOpen(true)}
-              className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 h-10"
+              className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 h-10 rounded-xl px-5"
               size="sm"
               type="button"
               disabled={isApplying}
@@ -388,7 +419,7 @@ export function QuickScannerSection() {
 
           {/* Results table */}
           <div className="rounded-xl border border-border/60 bg-background overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-muted/20">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-white">
               <div className="w-1/2 text-[10px] font-bold text-muted-foreground">Scrip</div>
               <div className="w-1/4 text-right text-[10px] font-bold text-muted-foreground">LTP</div>
               <div className="w-1/4 text-right text-[10px] font-bold text-muted-foreground">{indicatorColumnLabel || "Value"}</div>
