@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { ConditionState, QueryState, ScanResultRow } from "@/types/screener";
@@ -472,9 +471,8 @@ export function QuickScannerSection() {
   ];
 
   return (
-    <div className="mb-5" aria-label="Quick scanner">
-      <Card className="w-full max-w-[360px] bg-white rounded-2xl shadow-[0_2px_8px_rgba(158,144,99,0.16)]">
-        <CardContent className="p-4">
+    <div className="mb-5 -mx-4 bg-white shadow-[0_2px_8px_rgba(158,144,99,0.16)]" aria-label="Quick scanner">
+      <div className="px-4 py-4">
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -596,8 +594,7 @@ export function QuickScannerSection() {
               {applyError}
             </p>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       {/* Filter dialog */}
       <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
