@@ -27,11 +27,14 @@ import {
   type IndicatorCategory,
 } from "@/data/indicators";
 import {
+  BALANCE_SHEET_ITEMS,
   CASH_FLOW_ITEMS,
   FINANCIAL_RATIOS_ITEMS,
+  INCOME_GROWTH_ITEMS,
   FUTURES_OPTIONS_ITEMS,
   mockIndicatorId,
   PROFITABILITY_ITEMS,
+  SHAREHOLDING_ITEMS,
   VALUATION_ITEMS,
 } from "@/data/diyMockCatalog";
 import { getRelevantRightIndicators } from "@/lib/rightOperandIndicators";
@@ -52,7 +55,10 @@ const CONDITION_GROUPS = [
   "Candlesticks",
   "Financial Ratios",
   "Profitability",
+  "Income & Growth",
+  "Balance Sheet",
   "Cash Flow",
+  "Shareholding",
   "Valuation",
   "Futures & Options",
 ];
@@ -998,20 +1004,22 @@ function ConditionGroupSidebar({
   onSelectGroup: (group: string) => void;
 }) {
   return (
-    <div className="flex flex-col h-full bg-muted/20">
-      <div className="flex-1 overflow-y-auto py-2">
+    <div className="flex h-full flex-col bg-white">
+      <div className="flex-1 overflow-y-auto">
         {CONDITION_GROUPS.map((group) => (
           <button
             key={group}
             type="button"
             onClick={() => onSelectGroup(group)}
             className={cn(
-              "w-full px-4 py-2.5 text-sm text-left flex items-center justify-between hover:bg-primary/5 hover:text-primary",
-              selectedGroup === group && "bg-primary/5 text-primary font-semibold"
+              "flex h-10 w-full items-center justify-between border-b border-[#F5F5F5] px-4 text-left text-[14px]",
+              selectedGroup === group
+                ? "bg-[#F5F2F9] font-medium text-[#542087]"
+                : "bg-white font-normal text-[#262626] hover:bg-primary/5"
             )}
           >
             <span>{group}</span>
-            <span className="text-muted-foreground text-xs">›</span>
+            <ChevronRight size={12} className="text-[#777777]" />
           </button>
         ))}
       </div>
@@ -1050,7 +1058,7 @@ function IndicatorSidebar({
 
     return (
       <div className="flex flex-col bg-background h-full">
-        <div className="flex-1 overflow-y-auto px-2 py-2">
+        <div className="flex-1 overflow-y-auto px-1 py-2">
           {filtered.map((item) => (
             <button
               key={item.id}
@@ -1061,8 +1069,8 @@ function IndicatorSidebar({
               }}
               aria-disabled={disableSelection}
               className={cn(
-                "w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg text-left",
-                "hover:bg-muted",
+                "mb-0.5 flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm text-[#262626]",
+                "hover:bg-primary/5",
                 disableSelection && "cursor-default text-muted-foreground"
               )}
             >
@@ -1070,8 +1078,9 @@ function IndicatorSidebar({
                 {item.locked && (
                   <Lock size={14} className="text-muted-foreground" />
                 )}
-                <span>{item.label}</span>
+                <span className="text-sm">{item.label}</span>
               </span>
+              <span className="shrink-0 text-sm leading-none text-muted-foreground">›</span>
             </button>
           ))}
         </div>
@@ -1082,7 +1091,7 @@ function IndicatorSidebar({
   // Default indicator list backed by INDICATORS
   return (
     <div className="flex flex-col bg-background h-full">
-      <div className="flex-1 overflow-y-auto px-2 py-2">
+      <div className="flex-1 overflow-y-auto px-1 py-2">
         {CATEGORIES.filter((cat) => {
           if (
             excludePatterns &&
@@ -1103,24 +1112,24 @@ function IndicatorSidebar({
           if (items.length === 0) return null;
           return (
             <div key={cat.key} className="mb-1">
-              <div className="px-2 py-2 text-xs font-bold text-foreground">
+              <div className="px-3 py-2 text-[16px] font-bold leading-5 text-[#262626]">
                 {cat.label}
               </div>
               {items.map((ind) => (
                 <button
                   key={ind.id}
                   onClick={() => onSelect(ind.id)}
-                  className="w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg hover:bg-primary/5 transition-colors text-left"
+                  className="mb-0.5 flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm text-[#262626] transition-colors hover:bg-primary/5"
                 >
                   <span className="flex items-center gap-1.5">
-                    {ind.name}
+                    <span className="text-sm">{ind.name}</span>
                     {ind.isNew && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary font-semibold">
                         New
                       </Badge>
                     )}
                   </span>
-                  <span className="text-muted-foreground">›</span>
+                  <span className="shrink-0 text-sm leading-none text-muted-foreground">›</span>
                 </button>
               ))}
             </div>
@@ -1231,6 +1240,33 @@ function Indicator2FieldChevron() {
       aria-hidden
     />
   );
+}
+
+function parseMockNamespace(id: string): string | null {
+  if (!id.startsWith("mock:")) return null;
+  const parts = id.split(":");
+  return parts.length >= 3 ? parts[1] : null;
+}
+
+function getMockNamespaceItems(namespace: string): string[] {
+  if (namespace === "valuation") return VALUATION_ITEMS;
+  if (namespace === "financial") return FINANCIAL_RATIOS_ITEMS;
+  if (namespace === "profitability") return PROFITABILITY_ITEMS;
+  if (namespace === "cashflow") return CASH_FLOW_ITEMS;
+  if (namespace === "incomegrowth") return INCOME_GROWTH_ITEMS;
+  if (namespace === "balancesheet") return BALANCE_SHEET_ITEMS;
+  if (namespace === "shareholding") return SHAREHOLDING_ITEMS;
+  if (namespace === "fno") return FUTURES_OPTIONS_ITEMS;
+  return [];
+}
+
+function baseMockLabel(label: string): string {
+  return label
+    .replace(/\s*\([^)]*\)\s*/g, " ")
+    .replace(/\b(ttm|latest quarter|last fy|prev fy)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 // ─── Simple Condition Form (vertical labeled layout) ────────────────────────
@@ -1379,6 +1415,31 @@ function SimpleConditionForm({
   const showAdvancedMarginUi =
     leftInd &&
     (condition.operator === "greater_than" || condition.operator === "less_than");
+  const isMockIndicator = condition.leftIndicatorId.startsWith("mock:");
+  const mockNamespace = parseMockNamespace(condition.leftIndicatorId);
+  const mockCandidateBenchmarks = useMemo(() => {
+    if (!isMockIndicator || !mockNamespace || !leftInd) return [];
+    const items = getMockNamespaceItems(mockNamespace);
+    const base = baseMockLabel(leftInd.name);
+    if (!base) return [];
+    const preferred = items.filter((label) => {
+      const lower = label.toLowerCase();
+      const sameBase = baseMockLabel(label).includes(base) || base.includes(baseMockLabel(label));
+      const looksLikePeriodBenchmark =
+        /\b(last year|preceding year|prev year|last fy|prev fy|preceding quarter|year-ago|last quarter)\b/i.test(lower);
+      return sameBase && looksLikePeriodBenchmark;
+    });
+    return preferred.slice(0, 2).map((label) => ({
+      id: mockIndicatorId(mockNamespace, label),
+      label,
+    }));
+  }, [isMockIndicator, mockNamespace, leftInd]);
+  const selectedRule =
+    condition.operator === "less_than"
+      ? "lower"
+      : condition.operator === "is_between"
+        ? "custom"
+        : "higher";
 
   function openAdvancedDialog() {
     setMarginDraft(
@@ -1607,7 +1668,7 @@ function SimpleConditionForm({
           </FormRowWithHeaderGutter>
 
           {/* Condition (operator) */}
-          {leftInd && (
+          {leftInd && !isMockIndicator && (
             <div className="space-y-2">
               <FormRowWithHeaderGutter>
                 <Field label="Condition" contentClassName="px-2 py-1">
@@ -1659,8 +1720,98 @@ function SimpleConditionForm({
             </div>
           )}
 
+          {/* Mock fundamental indicators: mobile-consistent Rule + Benchmark parameter UX */}
+          {leftInd && isMockIndicator && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-[14px] font-medium leading-5 text-[#262626]">Rule</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onChange({ operator: "greater_than", rightType: "indicator" })}
+                    className={cn(
+                      "h-9 rounded-md border px-4 text-sm",
+                      selectedRule === "higher"
+                        ? "border-[#37135B] bg-[#FBF8FD] text-[#37135B]"
+                        : "border-[#E1E1E1] text-[#262626]"
+                    )}
+                  >
+                    Higher than
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ operator: "less_than", rightType: "indicator" })}
+                    className={cn(
+                      "h-9 rounded-md border px-4 text-sm",
+                      selectedRule === "lower"
+                        ? "border-[#37135B] bg-[#FBF8FD] text-[#37135B]"
+                        : "border-[#E1E1E1] text-[#262626]"
+                    )}
+                  >
+                    Lower than
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ operator: "is_between", rightType: "value" })}
+                    className={cn(
+                      "h-9 rounded-md border px-4 text-sm",
+                      selectedRule === "custom"
+                        ? "border-[#37135B] bg-[#FBF8FD] text-[#37135B]"
+                        : "border-[#E1E1E1] text-[#262626]"
+                    )}
+                  >
+                    Custom range
+                  </button>
+                </div>
+              </div>
+
+              {selectedRule !== "custom" && (
+                <div className="space-y-2">
+                  <p className="text-[14px] font-medium leading-5 text-[#262626]">Benchmark parameter</p>
+                  <div className="space-y-2">
+                    {mockCandidateBenchmarks.map((b) => (
+                      <label key={b.id} className="flex cursor-pointer items-center gap-2 text-sm text-[#262626]">
+                        <input
+                          type="radio"
+                          name={`benchmark-${condition.id}`}
+                          checked={condition.rightType === "indicator" && condition.rightIndicatorId === b.id}
+                          onChange={() =>
+                            onChange({
+                              rightType: "indicator",
+                              rightIndicatorId: b.id,
+                              rightParams: {},
+                              rightValue: "",
+                            })
+                          }
+                          className="h-4 w-4 accent-primary"
+                        />
+                        <span>{b.label}</span>
+                      </label>
+                    ))}
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-[#262626]">
+                      <input
+                        type="radio"
+                        name={`benchmark-${condition.id}`}
+                        checked={condition.rightType === "value"}
+                        onChange={() =>
+                          onChange({
+                            rightType: "value",
+                            rightIndicatorId: "",
+                            rightParams: {},
+                          })
+                        }
+                        className="h-4 w-4 accent-primary"
+                      />
+                      <span>Value</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Right operand — searchable picker + row mirroring Indicator 1 when an indicator is chosen */}
-          {opDef && needsRight && !isRange && (
+          {opDef && needsRight && !isRange && !isMockIndicator && (
             <div className="space-y-3">
               {condition.rightType === "value" ? (
                 <FormRowWithHeaderGutter>
@@ -2390,7 +2541,7 @@ export function CustomScannerPage() {
               leftIndicatorId: indicatorId,
               leftParams: ind ? defaultParams(ind) : {},
               operator: isPattern ? "detected" : "greater_than",
-              rightType: "value" as const,
+              rightType: "indicator" as const,
               rightValue: "",
               rightIndicatorId: "",
               rightParams: {},
@@ -3737,42 +3888,40 @@ export function CustomScannerPage() {
             "flex flex-col bg-background border-l border-border shadow-xl",
             mobileFilterOpen
               ? "fixed inset-0 z-[60]"
-              : "absolute top-0 bottom-0 left-[460px] z-40"
+              : "absolute top-0 bottom-0 left-[460px] z-40 w-[700px]"
           )}>
-            <div className="px-4 py-3 border-b border-border flex items-center gap-3">
-              <div className="flex items-baseline gap-2 text-sm font-semibold text-foreground">
-                <span>Condition type</span>
-                <span className="text-muted-foreground text-xs">·</span>
-                <span>Select Indicator</span>
+            <div className="shrink-0 border-b border-[#E1E1E1] bg-white">
+              <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
+                <p className="text-base font-semibold text-[#262626]">Add filters</p>
+                <button
+                  type="button"
+                  onClick={handleCloseIndicatorSidebar}
+                  className="shrink-0 p-1 text-[#777777]"
+                  aria-label="Close indicator picker"
+                >
+                  <X size={16} />
+                </button>
               </div>
-              <div className="flex-1">
-                <div className="relative">
+              <div className="px-4 pb-3">
+                <div className="relative min-w-0">
                   <Search
                     size={14}
-                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#777777]"
                   />
                   <Input
-                    placeholder="Search for indicator..."
+                    placeholder="Search all indicators..."
                     value={indicatorSearch}
                     onChange={(e) => setIndicatorSearch(e.target.value)}
-                    className="h-9 text-sm pl-8"
+                    className="h-10 w-full border-[#542087] pl-8 pr-3 focus-visible:ring-[#542087]"
                     autoFocus
                   />
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleCloseIndicatorSidebar}
-                className="text-muted-foreground hover:text-foreground"
-                aria-label="Back to screener"
-              >
-                <X size={16} />
-              </button>
             </div>
             <div className="flex flex-1 min-h-0">
               <div className={cn(
-                "border-r border-border shrink-0 overflow-y-auto",
-                mobileFilterOpen ? "w-[40%]" : "w-[220px]"
+                "shrink-0 overflow-y-auto border-r border-[#E1E1E1]",
+                mobileFilterOpen ? "w-[40%]" : "w-[42%]"
               )}>
                 <ConditionGroupSidebar
                   selectedGroup={selectedGroup}
@@ -3781,7 +3930,7 @@ export function CustomScannerPage() {
               </div>
               <div className={cn(
                 "overflow-y-auto",
-                mobileFilterOpen ? "flex-1" : "w-[340px] max-h-[calc(100vh-7rem)]"
+                mobileFilterOpen ? "flex-1" : "flex-1"
               )}>
                 <IndicatorSidebar
                   open={true}
@@ -3809,7 +3958,10 @@ export function CustomScannerPage() {
                     : selectedGroup === "Universe" ||
                       selectedGroup === "Financial Ratios" ||
                       selectedGroup === "Profitability" ||
+                      selectedGroup === "Income & Growth" ||
+                      selectedGroup === "Balance Sheet" ||
                       selectedGroup === "Cash Flow" ||
+                      selectedGroup === "Shareholding" ||
                       selectedGroup === "Valuation" ||
                       selectedGroup === "Futures & Options"
                       ? ([] as IndicatorCategory[])
@@ -3828,12 +3980,30 @@ export function CustomScannerPage() {
                             label,
                             locked: false,
                           }))
+                        : selectedGroup === "Income & Growth"
+                          ? INCOME_GROWTH_ITEMS.map((label) => ({
+                              id: mockIndicatorId("incomegrowth", label),
+                              label,
+                              locked: false,
+                            }))
+                          : selectedGroup === "Balance Sheet"
+                            ? BALANCE_SHEET_ITEMS.map((label) => ({
+                                id: mockIndicatorId("balancesheet", label),
+                                label,
+                                locked: false,
+                              }))
                         : selectedGroup === "Cash Flow"
                           ? CASH_FLOW_ITEMS.map((label) => ({
                               id: mockIndicatorId("cashflow", label),
                               label,
                               locked: false,
                             }))
+                          : selectedGroup === "Shareholding"
+                            ? SHAREHOLDING_ITEMS.map((label) => ({
+                                id: mockIndicatorId("shareholding", label),
+                                label,
+                                locked: false,
+                              }))
                           : selectedGroup === "Valuation"
                             ? VALUATION_ITEMS.map((label) => ({
                                 id: mockIndicatorId("valuation", label),

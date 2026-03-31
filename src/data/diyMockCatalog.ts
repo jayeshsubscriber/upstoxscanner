@@ -11,7 +11,15 @@ export type FundamentalRhsKind =
   | "fno";
 
 export interface DiyMockMeta {
-  namespace: "valuation" | "financial" | "profitability" | "cashflow" | "fno";
+  namespace:
+    | "valuation"
+    | "financial"
+    | "profitability"
+    | "cashflow"
+    | "incomegrowth"
+    | "balancesheet"
+    | "shareholding"
+    | "fno";
   label: string;
   rhsKind: FundamentalRhsKind;
 }
@@ -22,6 +30,9 @@ export const DIY_MOCK_FUNDAMENTAL_NAMESPACES = new Set([
   "financial",
   "profitability",
   "cashflow",
+  "incomegrowth",
+  "balancesheet",
+  "shareholding",
   "fno",
 ]);
 
@@ -214,6 +225,59 @@ const CASH_FLOW_LABELS = [
   "Cash 7Years back",
 ] as const;
 
+const INCOME_GROWTH_LABELS = [
+  "Revenue (TTM)",
+  "Profit After Tax (TTM)",
+  "EPS (TTM)",
+  "Revenue (Latest Quarter)",
+  "Profit After Tax (Latest Quarter)",
+  "EPS (Latest Quarter)",
+  "Revenue Growth (TTM)",
+  "Profit Growth (TTM)",
+  "EPS Growth (TTM)",
+  "Revenue Growth (3Y CAGR)",
+  "Profit Growth (3Y CAGR)",
+  "EPS Growth (3Y CAGR)",
+  "Revenue Growth (5Y CAGR)",
+  "Profit Growth (5Y CAGR)",
+  "EPS Growth (5Y CAGR)",
+  "Quarterly sales growth (YoY)",
+  "Quarterly profit growth (YoY)",
+  "Change in promoter holding",
+] as const;
+
+const BALANCE_SHEET_LABELS = [
+  "Debt",
+  "Working capital",
+  "Total Assets",
+  "Current assets",
+  "Current liabilities",
+  "Cash Equivalents",
+  "Inventory",
+  "Trade receivables",
+  "Trade Payables",
+  "Net block",
+  "Investments",
+  "Contingent liabilities",
+] as const;
+
+const SHAREHOLDING_LABELS = [
+  "Promoter holding",
+  "FII holding",
+  "DII holding",
+  "Public holding",
+  "Change in FII holding",
+  "Change in DII holding",
+  "Change in Promoter Holding",
+  "Unpledged promoter holding",
+  "Pledged percentage",
+  "Number of Shareholders",
+  "Number of Shareholders preceding quarter",
+  "Number of Shareholders 1year back",
+  "Change in FII holding 3Years",
+  "Change in DII holding 3Years",
+] as const;
+
 const FNO_LABELS = [
   "Fair Value",
   "Future Close Price",
@@ -270,6 +334,24 @@ const CASH_FLOW_META: DiyMockMeta[] = CASH_FLOW_LABELS.map((label) => ({
   rhsKind: "cash_balance_or_flow_amount" as const,
 }));
 
+const INCOME_GROWTH_META: DiyMockMeta[] = INCOME_GROWTH_LABELS.map((label) => ({
+  namespace: "incomegrowth",
+  label,
+  rhsKind: /\b(growth|cagr|yoy)\b/i.test(label) ? "growth_or_stat" : "profitability_amount",
+}));
+
+const BALANCE_SHEET_META: DiyMockMeta[] = BALANCE_SHEET_LABELS.map((label) => ({
+  namespace: "balancesheet",
+  label,
+  rhsKind: "cash_balance_or_flow_amount" as const,
+}));
+
+const SHAREHOLDING_META: DiyMockMeta[] = SHAREHOLDING_LABELS.map((label) => ({
+  namespace: "shareholding",
+  label,
+  rhsKind: "growth_or_stat" as const,
+}));
+
 const FNO_META: DiyMockMeta[] = FNO_LABELS.map((label) => ({
   namespace: "fno",
   label,
@@ -282,6 +364,9 @@ export const DIY_MOCK_META: readonly DiyMockMeta[] = [
   ...FINANCIAL_META,
   ...PROFITABILITY_META,
   ...CASH_FLOW_META,
+  ...INCOME_GROWTH_META,
+  ...BALANCE_SHEET_META,
+  ...SHAREHOLDING_META,
   ...FNO_META,
 ];
 
@@ -289,4 +374,7 @@ export const VALUATION_ITEMS = VALUATION_META.map((m) => m.label);
 export const FINANCIAL_RATIOS_ITEMS = FINANCIAL_META.map((m) => m.label);
 export const PROFITABILITY_ITEMS = PROFITABILITY_META.map((m) => m.label);
 export const CASH_FLOW_ITEMS = CASH_FLOW_META.map((m) => m.label);
+export const INCOME_GROWTH_ITEMS = INCOME_GROWTH_META.map((m) => m.label);
+export const BALANCE_SHEET_ITEMS = BALANCE_SHEET_META.map((m) => m.label);
+export const SHAREHOLDING_ITEMS = SHAREHOLDING_META.map((m) => m.label);
 export const FUTURES_OPTIONS_ITEMS = FNO_META.map((m) => m.label);
