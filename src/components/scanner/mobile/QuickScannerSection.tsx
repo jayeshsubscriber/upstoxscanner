@@ -1561,7 +1561,7 @@ export function QuickScannerSection() {
                 <Zap className="w-4 h-4 text-primary" />
               </div>
               <div className="min-w-0">
-                <p className="text-[16px] font-semibold text-foreground">Quick Screener</p>
+                <p className="text-xl leading-7 font-bold text-foreground">Quick Screener</p>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
                   Mini filter for beginners: one idea, fast matches.
                 </p>
