@@ -1416,6 +1416,7 @@ function SimpleConditionForm({
     leftInd &&
     (condition.operator === "greater_than" || condition.operator === "less_than");
   const isMockIndicator = condition.leftIndicatorId.startsWith("mock:");
+  const usesRuleBenchmarkUi = !!leftInd && leftInd.outputType === "numeric";
   const mockNamespace = parseMockNamespace(condition.leftIndicatorId);
   const mockCandidateBenchmarks = useMemo(() => {
     if (!isMockIndicator || !mockNamespace || !leftInd) return [];
@@ -1434,6 +1435,14 @@ function SimpleConditionForm({
       label,
     }));
   }, [isMockIndicator, mockNamespace, leftInd]);
+  const technicalCandidateBenchmarks = useMemo(() => {
+    if (!leftInd || isMockIndicator) return [];
+    return getRelevantRightIndicators(condition.leftIndicatorId)
+      .slice(0, 3)
+      .map((ind) => ({ id: ind.id, label: ind.name }))
+      .filter((item): item is { id: string; label: string } => Boolean(item));
+  }, [condition.leftIndicatorId, isMockIndicator, leftInd]);
+  const benchmarkOptions = isMockIndicator ? mockCandidateBenchmarks : technicalCandidateBenchmarks;
   const selectedRule =
     condition.operator === "less_than"
       ? "lower"
@@ -1668,7 +1677,7 @@ function SimpleConditionForm({
           </FormRowWithHeaderGutter>
 
           {/* Condition (operator) */}
-          {leftInd && !isMockIndicator && (
+          {leftInd && !usesRuleBenchmarkUi && (
             <div className="space-y-2">
               <FormRowWithHeaderGutter>
                 <Field label="Condition" contentClassName="px-2 py-1">
@@ -1720,8 +1729,8 @@ function SimpleConditionForm({
             </div>
           )}
 
-          {/* Mock fundamental indicators: mobile-consistent Rule + Benchmark parameter UX */}
-          {leftInd && isMockIndicator && (
+          {/* Numeric indicators: mobile-consistent Rule + Benchmark parameter UX */}
+          {leftInd && usesRuleBenchmarkUi && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <p className="text-[14px] font-medium leading-5 text-[#262626]">Rule</p>
@@ -1769,7 +1778,7 @@ function SimpleConditionForm({
                 <div className="space-y-2">
                   <p className="text-[14px] font-medium leading-5 text-[#262626]">Benchmark parameter</p>
                   <div className="space-y-2">
-                    {mockCandidateBenchmarks.map((b) => (
+                    {benchmarkOptions.map((b) => (
                       <label key={b.id} className="flex cursor-pointer items-center gap-2 text-sm text-[#262626]">
                         <input
                           type="radio"
@@ -1779,7 +1788,10 @@ function SimpleConditionForm({
                             onChange({
                               rightType: "indicator",
                               rightIndicatorId: b.id,
-                              rightParams: {},
+                              rightParams: (() => {
+                                const ind = getIndicator(b.id);
+                                return ind ? defaultParams(ind) : {};
+                              })(),
                               rightValue: "",
                             })
                           }
@@ -1811,7 +1823,7 @@ function SimpleConditionForm({
           )}
 
           {/* Right operand — searchable picker + row mirroring Indicator 1 when an indicator is chosen */}
-          {opDef && needsRight && !isRange && !isMockIndicator && (
+          {opDef && needsRight && !isRange && !usesRuleBenchmarkUi && (
             <div className="space-y-3">
               {condition.rightType === "value" ? (
                 <FormRowWithHeaderGutter>
