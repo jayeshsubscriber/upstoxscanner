@@ -1217,6 +1217,14 @@ function IndicatorSidebar({
   customItems?: { id: string; label: string; locked?: boolean }[];
   disableSelection?: boolean;
 }) {
+  const plusSeed = (value: string) => {
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+      hash = (hash * 33 + value.charCodeAt(i)) % 1000003;
+    }
+    return hash;
+  };
+  const isPlusBadge = (value: string) => plusSeed(value) % 10 < 3; // ~30%
   const q = search.trim().toLowerCase();
 
   if (!open) return null;
@@ -1252,6 +1260,9 @@ function IndicatorSidebar({
                   <Lock size={14} className="text-muted-foreground" />
                 )}
                 <span className="text-sm">{item.label}</span>
+                {isPlusBadge(item.id) && (
+                  <img src="/plus-logo.png" alt="Plus" className="h-4 w-[29px] shrink-0" />
+                )}
               </span>
               <span className="shrink-0 text-sm leading-none text-muted-foreground">›</span>
             </button>
@@ -1296,6 +1307,9 @@ function IndicatorSidebar({
                 >
                   <span className="flex items-center gap-1.5">
                     <span className="text-sm">{ind.name}</span>
+                    {isPlusBadge(ind.id) && (
+                      <img src="/plus-logo.png" alt="Plus" className="h-4 w-[29px] shrink-0" />
+                    )}
                     {ind.isNew && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary font-semibold">
                         New

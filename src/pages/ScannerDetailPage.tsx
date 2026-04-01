@@ -5,6 +5,15 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
   ArrowLeft, ChevronDown, TrendingUp, TrendingDown,
   Zap, Lock, Info, BookOpen, Target, ShieldAlert, BellRing, Share2,
   Timer, RefreshCw, Layers, BarChart3, Plus,
@@ -30,6 +39,28 @@ const MARKET_CAP_BY_SYMBOL_CR: Record<string, number> = {
   HCLTECH: 360000,
   MARUTI: 350000,
 };
+
+const RUN_DAY_OPTIONS = [
+  { id: "all-market-days", label: "All market days", hint: "Runs on every trading session" },
+  { id: "custom", label: "Specific weekdays", hint: "Choose exact days manually" },
+] as const;
+
+const RUN_TIMING_OPTIONS = [
+  { id: "every-1m", label: "Every 1 min" },
+  { id: "every-5m", label: "Every 5 mins" },
+  { id: "every-15m", label: "Every 15 mins" },
+  { id: "specific-time", label: "Specific time of day" },
+] as const;
+
+const WEEKDAY_OPTIONS = [
+  { id: "mon", label: "Mon" },
+  { id: "tue", label: "Tue" },
+  { id: "wed", label: "Wed" },
+  { id: "thu", label: "Thu" },
+  { id: "fri", label: "Fri" },
+  { id: "sat", label: "Sat" },
+  { id: "sun", label: "Sun" },
+] as const;
 
 function formatMarketCapFromCr(valueCr?: number): string {
   if (!valueCr || valueCr <= 0) return "—";
@@ -194,6 +225,12 @@ export function ScannerDetailPage() {
   const [expandedFilterRows, setExpandedFilterRows] = useState<Record<string, boolean>>({});
   const [sortBy, setSortBy] = useState<"rank" | "change" | "volume">("rank");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [alertsDialogOpen, setAlertsDialogOpen] = useState(false);
+  const [runDaysMode, setRunDaysMode] = useState<(typeof RUN_DAY_OPTIONS)[number]["id"]>("all-market-days");
+  const [runTimingMode, setRunTimingMode] = useState<(typeof RUN_TIMING_OPTIONS)[number]["id"]>("every-5m");
+  const [specificTime, setSpecificTime] = useState("09:20");
+  const [customDays, setCustomDays] = useState<string[]>(["mon", "tue", "wed", "thu", "fri"]);
+  const [alertsSaved, setAlertsSaved] = useState(false);
 
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
 
@@ -247,6 +284,39 @@ export function ScannerDetailPage() {
       kind: "indicator" as const,
     })),
   ];
+
+  function toggleCustomDay(dayId: string) {
+    setCustomDays((prev) =>
+      prev.includes(dayId) ? prev.filter((id) => id !== dayId) : [...prev, dayId]
+    );
+  }
+
+  function alertsScheduleSummary() {
+    const runDaysLabel =
+      runDaysMode === "all-market-days"
+        ? "All market days"
+        : customDays.length > 0
+            ? WEEKDAY_OPTIONS.filter((d) => customDays.includes(d.id))
+                .map((d) => d.label)
+                .join(", ")
+            : "No weekdays selected";
+
+    const timingLabel =
+      runTimingMode === "every-1m"
+        ? "Every 1 min"
+        : runTimingMode === "every-5m"
+          ? "Every 5 mins"
+          : runTimingMode === "every-15m"
+            ? "Every 15 mins"
+            : `At ${specificTime}`;
+
+    return `${runDaysLabel} • ${timingLabel}`;
+  }
+
+  function saveAlertSchedule() {
+    setAlertsSaved(true);
+    setAlertsDialogOpen(false);
+  }
 
   return (
     <div className="w-full px-4 py-8 sm:px-6 lg:px-8">
@@ -490,9 +560,18 @@ export function ScannerDetailPage() {
                 </div>
                 {!isPlus && (
                   <div className="flex items-center gap-2">
-                    <Button size="sm" className="h-8 gap-1.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90">
+                    <Button
+                      size="sm"
+                      className={cn(
+                        "h-8 gap-1.5 text-xs",
+                        alertsSaved
+                          ? "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/15"
+                          : "bg-primary text-primary-foreground hover:bg-primary/90"
+                      )}
+                      onClick={() => setAlertsDialogOpen(true)}
+                    >
                       <BellRing className="w-3.5 h-3.5" />
-                      Alerts
+                      {alertsSaved ? "Alerts On" : "Alerts"}
                     </Button>
                     <Button size="sm" className="h-8 gap-1.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90">
                       <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -673,6 +752,133 @@ export function ScannerDetailPage() {
               </>
             )}
           </Card>
+
+          <Dialog open={alertsDialogOpen} onOpenChange={setAlertsDialogOpen}>
+            <DialogContent className="sm:max-w-lg max-h-[min(90vh,680px)] overflow-y-auto gap-0 p-0">
+              <DialogHeader className="p-6 pb-4 text-left border-b border-border/60">
+                <DialogTitle className="text-lg">Configure Alerts</DialogTitle>
+                <DialogDescription className="text-sm text-muted-foreground leading-relaxed">
+                  Choose when this scanner should run and alert you about new matches.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="px-6 py-4 space-y-5">
+                <section className="space-y-2">
+                  <h3 className="text-sm font-semibold text-foreground">Scan Run Schedule</h3>
+                  <p className="text-xs text-muted-foreground">Days on which this scanner should run</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {RUN_DAY_OPTIONS.map((option) => (
+                      <label
+                        key={option.id}
+                        className={cn(
+                          "flex items-start gap-2 rounded-lg border p-2.5 cursor-pointer transition-colors min-h-[98px]",
+                          runDaysMode === option.id ? "border-primary/50 bg-primary/5" : "border-border/80 hover:bg-muted/40"
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="run-days"
+                          checked={runDaysMode === option.id}
+                          onChange={() => setRunDaysMode(option.id)}
+                          className="mt-1 accent-primary"
+                        />
+                        <span className="min-w-0">
+                          <span className="text-sm font-medium text-foreground block leading-5">{option.label}</span>
+                          <span className="text-xs text-muted-foreground leading-4">{option.hint}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </section>
+
+                {runDaysMode === "custom" && (
+                  <section className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Select weekdays</p>
+                    <div className="flex flex-wrap gap-2">
+                      {WEEKDAY_OPTIONS.map((day) => {
+                        const selected = customDays.includes(day.id);
+                        return (
+                          <button
+                            key={day.id}
+                            type="button"
+                            onClick={() => toggleCustomDay(day.id)}
+                            className={cn(
+                              "h-8 rounded-full border px-3 text-xs font-semibold transition-colors",
+                              selected
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-white text-foreground hover:border-primary/40"
+                            )}
+                          >
+                            {day.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                <section className="space-y-2">
+                  <h3 className="text-sm font-semibold text-foreground">Timings</h3>
+                  <p className="text-xs text-muted-foreground">How often this scanner should run</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                    {RUN_TIMING_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setRunTimingMode(option.id)}
+                        className={cn(
+                          "rounded-lg border px-3 py-2 text-left text-sm transition-colors min-h-[44px]",
+                          runTimingMode === option.id
+                            ? "border-primary/50 bg-primary/5 text-foreground font-medium"
+                            : "border-border/80 text-muted-foreground hover:bg-muted/40"
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                {runTimingMode === "specific-time" && (
+                  <section className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Run once daily at</p>
+                    <Input
+                      type="time"
+                      step={60}
+                      value={specificTime}
+                      onChange={(e) => setSpecificTime(e.target.value)}
+                      className="w-full sm:w-[220px]"
+                    />
+                  </section>
+                )}
+
+                <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+                  <p className="text-[11px] font-medium text-primary">Pricing for this schedule</p>
+                  <p className="text-xs text-primary/90 mt-0.5">Rs 10/day</p>
+                  <p className="text-[11px] text-primary/80 mt-1">{alertsScheduleSummary()}</p>
+                </div>
+              </div>
+
+              <DialogFooter className="p-4 sm:p-6 flex-row gap-2 justify-end border-t border-border/60 bg-muted/20">
+                <Button type="button" variant="outline" onClick={() => setAlertsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={saveAlertSchedule}
+                  disabled={runDaysMode === "custom" && customDays.length === 0}
+                >
+                  Save schedule
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {alertsSaved && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Alerts configured: {alertsScheduleSummary()}
+            </p>
+          )}
 
           <Card className="mt-4">
             <CardHeader className="p-5 pb-3 border-b border-border/60">

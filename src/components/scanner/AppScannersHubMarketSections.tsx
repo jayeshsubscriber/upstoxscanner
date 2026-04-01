@@ -1266,6 +1266,19 @@ function technicalScanRunLabel(sectionTitle: string, rowIdx: number): string {
   return TECHNICAL_SCAN_RUN_LABELS[seed % TECHNICAL_SCAN_RUN_LABELS.length];
 }
 
+function plusOnlySeed(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 31 + input.charCodeAt(i)) % 1000003;
+  }
+  return hash;
+}
+
+function isPlusOnlyScan(sectionTitle: string, scanLabel: string): boolean {
+  // Keep ~30% rows as Plus-only using deterministic pseudo-random selection.
+  return plusOnlySeed(`${sectionTitle}::${scanLabel}`) % 10 < 3;
+}
+
 const TECHNICAL_SCREEN_SECTIONS: Array<{
   title: string;
   Icon: LucideIcon;
@@ -1677,7 +1690,16 @@ export function AppScannersHubMarketSections() {
                       <div className="flex items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <h4 className="text-[14px] leading-5 font-semibold text-foreground pr-1">
-                            {item.label}
+                            <span className="inline-flex items-center gap-1.5">
+                              <span>{item.label}</span>
+                              {isPlusOnlyScan(section.title, item.label) && (
+                                <img
+                                  src="/plus-logo.png"
+                                  alt="Plus"
+                                  className="h-4 w-[29px] shrink-0"
+                                />
+                              )}
+                            </span>
                           </h4>
                           <p className={hubScanSubtextClassName}>{item.subtext}</p>
                           <div className="mt-2 flex items-center">
@@ -1744,7 +1766,16 @@ export function AppScannersHubMarketSections() {
                           <div className="relative">
                             <div className="min-w-0">
                               <h4 className="text-[14px] leading-5 font-semibold text-foreground truncate pr-5">
-                                {item.label}
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className="truncate">{item.label}</span>
+                                  {isPlusOnlyScan(section.title, item.label) && (
+                                    <img
+                                      src="/plus-logo.png"
+                                      alt="Plus"
+                                      className="h-4 w-[29px] shrink-0"
+                                    />
+                                  )}
+                                </span>
                               </h4>
                               <p className={hubScanSubtextClassName}>{item.subtext}</p>
 
