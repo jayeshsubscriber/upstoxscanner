@@ -172,7 +172,9 @@ export async function runCustomScan(
   query: QueryState,
   onProgress?: (p: ScanProgress) => void
 ): Promise<ScanResultRow[]> {
-  if (!supabase) throw new Error("Supabase not configured");
+  if (!supabase) {
+    return runDummyScan(query, onProgress);
+  }
 
   onProgress?.({ phase: "loading_data", message: "Loading instruments...", total: 0, matched: 0 });
 
@@ -219,6 +221,59 @@ export async function runCustomScan(
     phase: "done",
     message: `Found ${results.length} matches out of ${total} stocks`,
     total,
+    matched: results.length,
+  });
+
+  return results;
+}
+
+function runDummyScan(
+  query: QueryState,
+  onProgress?: (p: ScanProgress) => void
+): ScanResultRow[] {
+  onProgress?.({ phase: "loading_data", message: "Loading sample stocks...", total: 12, matched: 0 });
+  onProgress?.({ phase: "computing", message: "Running scan on sample data...", total: 12, matched: 0 });
+
+  const indicatorCols = extractIndicatorColumns(query);
+  const matchedGroups = Math.max(1, query.groups.length);
+
+  const seedRows = [
+    { symbol: "RELIANCE", name: "Reliance Industries", close: 2847.5, change1d: 2.14, volume: 4820000 },
+    { symbol: "HDFCBANK", name: "HDFC Bank", close: 1692.3, change1d: 1.87, volume: 6120000 },
+    { symbol: "INFY", name: "Infosys", close: 1548.75, change1d: 3.42, volume: 8940000 },
+    { symbol: "ICICIBANK", name: "ICICI Bank", close: 1124.6, change1d: 1.64, volume: 9840000 },
+    { symbol: "TCS", name: "Tata Consultancy Services", close: 4231.2, change1d: 0.92, volume: 2380000 },
+    { symbol: "SBIN", name: "State Bank of India", close: 832.1, change1d: 2.28, volume: 11200000 },
+    { symbol: "LT", name: "Larsen & Toubro", close: 3720.4, change1d: 1.35, volume: 1860000 },
+    { symbol: "BHARTIARTL", name: "Bharti Airtel", close: 1459.95, change1d: 2.02, volume: 5140000 },
+    { symbol: "AXISBANK", name: "Axis Bank", close: 1188.4, change1d: 1.28, volume: 4720000 },
+    { symbol: "SUNPHARMA", name: "Sun Pharma", close: 1234.85, change1d: 1.28, volume: 2840000 },
+    { symbol: "BAJFINANCE", name: "Bajaj Finance", close: 7842.3, change1d: 2.74, volume: 1890000 },
+    { symbol: "TATAMOTORS", name: "Tata Motors", close: 876.4, change1d: 4.12, volume: 12000000 },
+  ];
+
+  const results: ScanResultRow[] = seedRows.slice(0, 10).map((row, index) => {
+    const indicatorValues: Record<string, number> = {};
+    for (const col of indicatorCols) {
+      // Stable sample indicator values so table columns remain populated.
+      indicatorValues[col.key] = Number((row.close * (0.94 + ((index % 5) + 1) * 0.01)).toFixed(2));
+    }
+
+    return {
+      symbol: row.symbol,
+      name: row.name,
+      close: row.close,
+      change1d: row.change1d,
+      volume: row.volume,
+      matchedGroups,
+      indicatorValues,
+    };
+  });
+
+  onProgress?.({
+    phase: "done",
+    message: `Showing ${results.length} sample matches`,
+    total: seedRows.length,
     matched: results.length,
   });
 

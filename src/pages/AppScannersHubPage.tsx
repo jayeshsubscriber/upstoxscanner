@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   Search,
   Zap,
@@ -851,7 +852,7 @@ function LiveSignalCard({ signal }: { signal: LiveMarketSignal }) {
     .filter((metric): metric is { label: string; value: string } => Boolean(metric));
 
   return (
-    <div className="w-[360px] shrink-0 rounded-xl border border-[#F2F0E5] bg-white overflow-hidden flex flex-col snap-start" style={{ boxShadow: "0px 2px 0px #F2F0E5" }}>
+    <div className="w-[360px] lg:w-full shrink-0 rounded-xl border border-[#F2F0E5] bg-white overflow-hidden flex flex-col snap-start" style={{ boxShadow: "0px 2px 0px #F2F0E5" }}>
       {/* HEADER: Stock + Price */}
       <div className="px-3.5 pt-3 pb-2.5">
         <div className="flex items-start justify-between gap-2">
@@ -993,6 +994,162 @@ const OPPORTUNITY_TRACKS = [
   },
 ] as const;
 
+type CandlestickFamily =
+  | "bullish_candles"
+  | "bullish_reversal"
+  | "bullish_continuation"
+  | "bearish_candles"
+  | "bearish_reversal"
+  | "bearish_continuation";
+
+type CandlestickTimeframe = "1m" | "5m" | "15m" | "30m" | "1d";
+
+interface CandlestickDetectionRow {
+  symbol: string;
+  ltp: number;
+  changeAbs: number;
+  changePct: number;
+  detectedPattern: string;
+  family: CandlestickFamily;
+  timeframe: CandlestickTimeframe;
+  indexUniverse: string;
+}
+
+const CANDLESTICK_INDEX_OPTIONS = [
+  "Nifty 50",
+  "Nifty Next 50",
+  "Nifty 100",
+  "Nifty 200",
+  "Nifty 500",
+] as const;
+
+const CANDLESTICK_TIMEFRAME_OPTIONS: Array<{ value: CandlestickTimeframe; label: string }> = [
+  { value: "1m", label: "1 min" },
+  { value: "5m", label: "5 min" },
+  { value: "15m", label: "15 min" },
+  { value: "30m", label: "30 min" },
+  { value: "1d", label: "1 Day" },
+];
+
+const CANDLESTICK_FAMILY_OPTIONS: Array<{ value: CandlestickFamily; label: string }> = [
+  { value: "bullish_candles", label: "Bullish" },
+  { value: "bullish_continuation", label: "Bullish Continuation" },
+  { value: "bullish_reversal", label: "Bullish Reversal" },
+  { value: "bearish_candles", label: "Bearish" },
+  { value: "bearish_continuation", label: "Bearish Continuation" },
+  { value: "bearish_reversal", label: "Bearish Reversal" },
+];
+
+const CANDLE_PATTERN_BUCKETS: Record<CandlestickFamily, string[]> = {
+  bullish_candles: ["White Marubozu"],
+  bullish_continuation: ["Neckline", "Upside Tasuki Gap"],
+  bullish_reversal: [
+    "Hammer",
+    "Bullish Engulfing",
+    "Dragonfly Doji",
+    "Inverted Hammer",
+    "Piercing Line",
+    "Morning Star",
+    "Bullish Harami",
+    "Bullish Harami Cross",
+    "Three White Soldiers",
+  ],
+  bearish_candles: ["Black Marubozu"],
+  bearish_continuation: ["Downside Tasuki Gap"],
+  bearish_reversal: [
+    "Hanging Man",
+    "Shooting Star",
+    "Identical Three Crows",
+    "Gravestone Doji",
+    "Darkcloud Cover",
+    "Bearish Harami",
+    "Bearish Harami Cross",
+    "Bearish Engulfing",
+    "Abandoned Baby Top",
+  ],
+};
+
+const CANDLE_SYMBOL_POOL = [
+  "RELIANCE", "HDFCBANK", "TCS", "INFY", "ICICIBANK", "LT", "SBIN", "AXISBANK",
+  "TATAMOTORS", "MARUTI", "SUNPHARMA", "BHARTIARTL", "WIPRO", "ADANIENT", "KOTAKBANK",
+  "BAJFINANCE", "HCLTECH", "ITC", "ASIANPAINT", "NESTLEIND", "DRREDDY", "POWERGRID",
+] as const;
+
+const CANDLESTICK_DETECTIONS: CandlestickDetectionRow[] = (() => {
+  const rows: CandlestickDetectionRow[] = [];
+  const families = CANDLESTICK_FAMILY_OPTIONS.map((f) => f.value);
+  const timeframes = CANDLESTICK_TIMEFRAME_OPTIONS.map((t) => t.value);
+  let idx = 0;
+
+  for (const family of families) {
+    const patterns = CANDLE_PATTERN_BUCKETS[family];
+    for (const indexUniverse of CANDLESTICK_INDEX_OPTIONS) {
+      for (const timeframe of timeframes) {
+        const countForBucket = 3; // keep 2-5 rows per filtered bucket
+        for (let i = 0; i < countForBucket; i += 1) {
+          const pattern = patterns[(idx + i) % patterns.length];
+          const symbol = CANDLE_SYMBOL_POOL[(idx + i) % CANDLE_SYMBOL_POOL.length];
+          const bull = family.startsWith("bullish");
+          const base = 120 + ((idx + i) % 17) * 53;
+          const changeAbs = Number((2 + ((idx + i) % 9) * 1.7).toFixed(2));
+          const signedAbs = bull ? changeAbs : -changeAbs;
+          const pct = Number(((Math.abs(signedAbs) / base) * 100).toFixed(2));
+          rows.push({
+            symbol,
+            ltp: Number((base + signedAbs).toFixed(2)),
+            changeAbs: signedAbs,
+            changePct: bull ? pct : -pct,
+            detectedPattern: pattern,
+            family,
+            timeframe,
+            indexUniverse,
+          });
+        }
+        idx += countForBucket;
+      }
+    }
+  }
+  return rows;
+})();
+
+function candlestickPatternImage(family: CandlestickFamily): string {
+  const isBull = family.startsWith("bullish");
+  const up = isBull ? "#16A34A" : "#DC2626";
+  const down = isBull ? "#DC2626" : "#16A34A";
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='120' height='64' viewBox='0 0 120 64'>
+  <line x1='12' y1='18' x2='12' y2='50' stroke='${up}' stroke-width='2'/>
+  <rect x='8' y='24' width='8' height='18' rx='1.5' fill='${up}'/>
+  <line x1='32' y1='10' x2='32' y2='54' stroke='${down}' stroke-width='2'/>
+  <rect x='28' y='16' width='8' height='22' rx='1.5' fill='${down}'/>
+  <line x1='52' y1='14' x2='52' y2='56' stroke='${up}' stroke-width='2'/>
+  <rect x='48' y='28' width='8' height='16' rx='1.5' fill='${up}'/>
+  <line x1='72' y1='8' x2='72' y2='46' stroke='${down}' stroke-width='2'/>
+  <rect x='68' y='20' width='8' height='18' rx='1.5' fill='${down}'/>
+  <line x1='92' y1='12' x2='92' y2='52' stroke='${up}' stroke-width='2'/>
+  <rect x='88' y='22' width='8' height='20' rx='1.5' fill='${up}'/>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function candlestickOutlook(row: CandlestickDetectionRow): string {
+  if (row.family === "bullish_reversal") {
+    return "Upside reversal possible if follow-through buying continues.";
+  }
+  if (row.family === "bullish_continuation") {
+    return "Trend continuation likely if price holds above breakout zone.";
+  }
+  if (row.family === "bullish_candles") {
+    return "Buyers are in control; momentum can stay positive near-term.";
+  }
+  if (row.family === "bearish_reversal") {
+    return "Downside reversal risk if selling pressure sustains.";
+  }
+  if (row.family === "bearish_continuation") {
+    return "Downtrend continuation likely if support levels break.";
+  }
+  return "Sellers are dominant; weakness can extend in the near term.";
+}
+
 /** Fallback brand colors per symbol. */
 const STOCK_COLORS: Record<string, string> = {
   RELIANCE: "#3B82F6", HDFCBANK: "#1E40AF", INFY: "#0EA5E9", WIPRO: "#6366F1",
@@ -1041,7 +1198,7 @@ function StockLogoAvatar({ symbol, size = 22 }: { symbol: string; size?: number 
 }
 
 function StockLogoRow({ symbols, total }: { symbols: string[]; total: number }) {
-  const shown = symbols.slice(0, 4);
+  const shown = symbols.slice(0, 3);
   const extra = total - shown.length;
   return (
     <div className="flex items-center gap-0.5">
@@ -1050,7 +1207,7 @@ function StockLogoRow({ symbols, total }: { symbols: string[]; total: number }) 
       ))}
       {extra > 0 && (
         <span className="ml-0.5 text-[10px] font-medium text-muted-foreground leading-none whitespace-nowrap">
-          +{extra}
+          + {extra} stocks
         </span>
       )}
     </div>
@@ -1067,6 +1224,8 @@ const SCANNER_TOP_SYMBOLS: Record<string, { symbols: string[]; total: number }> 
   "RSI Oversold (Daily < 30)":        { symbols: ["ASIANPAINT", "WIPRO", "SUNPHARMA", "ITC"], total: 9 },
   "Intraday RSI Oversold (<30)":      { symbols: ["TATAMOTORS", "MARUTI", "HCLTECH", "SBIN"], total: 14 },
   "Bullish Divergence (RSI)":         { symbols: ["RELIANCE", "TITAN", "BAJFINANCE", "INFY"], total: 8 },
+  "Golden Crossover":                 { symbols: ["SBIN", "ICICIBANK", "LT", "TCS"], total: 17 },
+  "Death Cross Alert":                { symbols: ["WIPRO", "ASIANPAINT", "KOTAKBANK", "SUNPHARMA"], total: 13 },
   "Moving Average Bounce (50 EMA)":   { symbols: ["HDFCBANK", "ICICIBANK", "TCS", "LT"], total: 19 },
   "RSI Reversal Hunter":              { symbols: ["KOTAKBANK", "BHARTIARTL", "ADANIENT", "HINDUNILVR"], total: 11 },
   "Volume Shockers (Live)":           { symbols: ["TATAMOTORS", "RELIANCE", "SBIN", "HDFCBANK"], total: 34 },
@@ -1077,6 +1236,8 @@ const SCANNER_TOP_SYMBOLS: Record<string, { symbols: string[]; total: number }> 
   "BTST Closing Bell Scanner":        { symbols: ["RELIANCE", "HDFCBANK", "TITAN", "ITC"], total: 18 },
   "Strong Close Near Day High":       { symbols: ["ICICIBANK", "BAJFINANCE", "TCS", "SBIN"], total: 22 },
   "52-Week High Breakout":            { symbols: ["TATAMOTORS", "MARUTI", "BHARTIARTL", "INFY"], total: 15 },
+  "Stocks Near All-Time High":        { symbols: ["ZOMATO", "TRENT", "ADANIENT", "RELIANCE"], total: 14 },
+  "Darvas Box Breakout":              { symbols: ["TRENT", "TITAN", "BHARTIARTL", "LT"], total: 11 },
   "Gap Up Opening (>1%)":             { symbols: ["RELIANCE", "TATAMOTORS", "HDFCBANK", "INFY"], total: 23 },
   "Gap Down Opening (<-1%)":          { symbols: ["ASIANPAINT", "WIPRO", "SUNPHARMA", "ITC"], total: 11 },
   "Open = High (Bearish)":            { symbols: ["SBIN", "HCLTECH", "KOTAKBANK", "TITAN"], total: 17 },
@@ -1086,61 +1247,51 @@ const SCANNER_TOP_SYMBOLS: Record<string, { symbols: string[]; total: number }> 
 const TECHNICAL_SCREEN_SECTIONS: Array<{
   title: string;
   Icon: LucideIcon;
-  scannerNames: string[];
+  scans: Array<{ label: string; matchName: string }>;
 }> = [
+  {
+    title: "Moving Average Signals",
+    Icon: LineChart,
+    scans: [
+      { label: "Golden Crossover", matchName: "Golden Crossover" },
+      { label: "Death Cross Alert", matchName: "Death Cross Alert" },
+      { label: "EMA Bullish Alignment", matchName: "Moving Average Bounce (50 EMA)" },
+      { label: "Moving Average Bounce", matchName: "Moving Average Bounce (50 EMA)" },
+      { label: "Price Reclaimed 200 DMA", matchName: "Golden Crossover" },
+    ],
+  },
   {
     title: "Breakout Scans",
     Icon: CandlestickChart,
-    scannerNames: [
-      "Opening Range Breakout (15-min)",
-      "Pivot Point Breakout (R1/S1)",
-      "Closing Range Breakout",
-      "NR7 Breakout",
-      "Consolidation Breakout (BB Squeeze)",
+    scans: [
+      { label: "52-Week High Breakout", matchName: "52-Week High Breakout" },
+      { label: "Stocks Near All-Time High", matchName: "Stocks Near All-Time High" },
+      { label: "Consolidation Breakout (BB Squeeze)", matchName: "Consolidation Breakout (BB Squeeze)" },
+      { label: "Darvas Box Breakout", matchName: "Darvas Box Breakout" },
+      { label: "Donchian Channel Breakout", matchName: "Consolidation Breakout (BB Squeeze)" },
+      { label: "NR7 Breakout", matchName: "NR7 Breakout" },
     ],
   },
   {
     title: "Mean Reversion Scans",
     Icon: LineChart,
-    scannerNames: [
-      "RSI Oversold (Daily < 30)",
-      "Intraday RSI Oversold (<30)",
-      "Bullish Divergence (RSI)",
-      "Moving Average Bounce (50 EMA)",
-      "RSI Reversal Hunter",
+    scans: [
+      { label: "RSI Oversold (Daily < 30)", matchName: "RSI Oversold (Daily < 30)" },
+      { label: "200 DMA Support Zone", matchName: "Moving Average Bounce (50 EMA)" },
+      { label: "Price Below Lower Bollinger Band", matchName: "Consolidation Breakout (BB Squeeze)" },
+      { label: "Bullish Divergence (RSI)", matchName: "Bullish Divergence (RSI)" },
+      { label: "Stochastic Oversold + Turning Up", matchName: "RSI Reversal Hunter" },
     ],
   },
   {
-    title: "Momentum & Volume Shockers",
+    title: "Momentum Scans",
     Icon: Flame,
-    scannerNames: [
-      "Volume Shockers (Live)",
-      "First 15-min Volume Shocker",
-      "Volume Shockers Alert",
-      "VWAP Cross Bullish (5-min)",
-      "Price-Volume Breakout",
-    ],
-  },
-  {
-    title: "BTST Scans",
-    Icon: Sunset,
-    scannerNames: [
-      "BTST Closing Bell Scanner",
-      "Strong Close Near Day High",
-      "Closing Range Breakout",
-      "NR7 Breakout",
-      "52-Week High Breakout",
-    ],
-  },
-  {
-    title: "Intraday Scans",
-    Icon: CalendarClock,
-    scannerNames: [
-      "Gap Up Opening (>1%)",
-      "Gap Down Opening (<-1%)",
-      "First 15-min Volume Shocker",
-      "Open = High (Bearish)",
-      "Open = Low (Bullish)",
+    scans: [
+      { label: "RSI Entering Overbought", matchName: "RSI Reversal Hunter" },
+      { label: "MACD Bullish Cross", matchName: "VWAP Cross Bullish (5-min)" },
+      { label: "Supertrend Flip (Bullish)", matchName: "Supertrend Flip (Bullish)" },
+      { label: "ADX Trending (Strong)", matchName: "First 15-min Volume Shocker" },
+      { label: "Aroon Bullish", matchName: "Sector Leader Rotation" },
     ],
   },
 ];
@@ -1151,60 +1302,120 @@ const FUNDAMENTAL_SCREEN_SECTIONS: Array<{
   scans: Array<{ label: string; matchName: string }>;
 }> = [
   {
-    title: "Thematic",
-    Icon: BriefcaseBusiness,
+    title: "Quality & Compounding",
+    Icon: Target,
     scans: [
-      { label: "FII Heavy Buying", matchName: "FII/DII Buying Surge" },
-      { label: "Profitable Small Caps", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "Green Energy / EV Plays", matchName: "Sector Leader Rotation" },
-      { label: "Defence & Railways", matchName: "Sector Leader Rotation" },
+      { label: "Coffee Can Portfolio", matchName: "Value + Growth Compounder" },
+      { label: "Consistent Compounders", matchName: "Value + Growth Compounder" },
+      { label: "Bluest of Blue Chips", matchName: "52-Week High Breakout" },
+      { label: "Piotroski Score = 9", matchName: "Piotroski Score > 7" },
+      { label: "Magic Formula", matchName: "Undervalued + Strong Fundamentals" },
     ],
   },
   {
-    title: "Value screens",
+    title: "Emerging Gems",
+    Icon: BriefcaseBusiness,
+    scans: [
+      { label: "Cash-Rich Small Caps", matchName: "Undervalued + Strong Fundamentals" },
+      { label: "Fast-Growing Micro Caps", matchName: "Value + Growth Compounder" },
+      { label: "Multi-Bagger Candidates", matchName: "Sector Leader Rotation" },
+      { label: "Under-the-Radar Compounders", matchName: "Value + Growth Compounder" },
+      { label: "Small Cap Turnarounds", matchName: "Undervalued + Strong Fundamentals" },
+    ],
+  },
+  {
+    title: "Value Screens",
     Icon: Landmark,
     scans: [
       { label: "Low PE + High Growth", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "Value + Growth Compounder", matchName: "Value + Growth Compounder" },
+      { label: "PEG Ratio < 1", matchName: "Value + Growth Compounder" },
+      { label: "Graham's Net-Net", matchName: "Undervalued + Strong Fundamentals" },
       { label: "High ROE Value Picks", matchName: "Piotroski Score > 7" },
       { label: "Cash-Rich Value Leaders", matchName: "Dividend Aristocrats" },
     ],
   },
   {
-    title: "Quality & Compounding Screens",
-    Icon: Target,
+    title: "Dividend Screens",
+    Icon: Bell,
     scans: [
-      { label: "Coffee Can Portfolio", matchName: "Value + Growth Compounder" },
-      { label: "Piotroski Score = 9", matchName: "Piotroski Score > 7" },
-      { label: "Consistent Compounders", matchName: "Dividend Aristocrats" },
-      { label: "Bluest of BlueChips", matchName: "52-Week High Breakout" },
-      { label: "Magic formula", matchName: "Undervalued + Strong Fundamentals" },
+      { label: "Dividend Aristocrats (India)", matchName: "Dividend Aristocrats" },
+      { label: "High Dividend Yield", matchName: "Dividend Aristocrats" },
+      { label: "Dividend + Low Debt", matchName: "Dividend Aristocrats" },
+    ],
+  },
+  {
+    title: "Turnaround & Special Situations",
+    Icon: LineChart,
+    scans: [
+      { label: "Loss to Profit Turnaround", matchName: "Undervalued + Strong Fundamentals" },
+      { label: "Debt Reduction Champions", matchName: "Value + Growth Compounder" },
+      { label: "Capacity Expansion", matchName: "Sector Leader Rotation" },
+    ],
+  },
+  {
+    title: "Shareholding & Ownership",
+    Icon: BriefcaseBusiness,
+    scans: [
+      { label: "FII Heavy Buying", matchName: "FII/DII Buying Surge" },
+      { label: "Promoter Buying", matchName: "FII/DII Buying Surge" },
+      { label: "Promoter Pledge Reduction", matchName: "Piotroski Score > 7" },
+      { label: "DII Accumulation", matchName: "FII/DII Buying Surge" },
+      { label: "High Promoter Holding + Low Debt", matchName: "Value + Growth Compounder" },
+    ],
+  },
+  {
+    title: "Thematic",
+    Icon: BriefcaseBusiness,
+    scans: [
+      { label: "Profitable Small Caps", matchName: "Undervalued + Strong Fundamentals" },
+      { label: "PSU Gems", matchName: "Dividend Aristocrats" },
+      { label: "Defence & Railways", matchName: "Sector Leader Rotation" },
+      { label: "Green Energy / EV Plays", matchName: "Sector Leader Rotation" },
     ],
   },
 ];
 
 export function AppScannersHubPage() {
   const [liveTimeHorizon, setLiveTimeHorizon] = useState<"all" | LiveTimeHorizon>("all");
+  const [candlestickIndex, setCandlestickIndex] = useState<string>("Nifty 50");
+  const [candlestickTimeframe, setCandlestickTimeframe] = useState<CandlestickTimeframe>("15m");
+  const [candlestickFamily, setCandlestickFamily] = useState<CandlestickFamily>("bullish_reversal");
+  const [indexSheetOpen, setIndexSheetOpen] = useState(false);
+  const [timeframeSheetOpen, setTimeframeSheetOpen] = useState(false);
 
   const filtered = useMemo(() => PRE_BUILT_SCANNERS, []);
 
   const technicalScreenSections = useMemo(() => {
     const scannerByName = new Map(filtered.map((s) => [s.name, s] as const));
+    const fallbackScanner =
+      scannerByName.get("Golden Crossover") ??
+      scannerByName.get("Moving Average Bounce (50 EMA)") ??
+      filtered[0];
     return TECHNICAL_SCREEN_SECTIONS.map((section) => ({
       ...section,
-      scanners: section.scannerNames
-        .map((name) => scannerByName.get(name))
-        .filter((s): s is (typeof filtered)[number] => Boolean(s))
+      scans: section.scans
+        .map((item) => ({
+          ...item,
+          scanner: scannerByName.get(item.matchName) ?? fallbackScanner,
+        }))
+        .filter((item): item is typeof item & { scanner: (typeof filtered)[number] } => Boolean(item.scanner))
         .slice(0, 5),
-    })).filter((section) => section.scanners.length > 0);
+    })).filter((section) => section.scans.length > 0);
   }, [filtered]);
 
   const fundamentalScreenSections = useMemo(() => {
     const scannerByName = new Map(filtered.map((s) => [s.name, s] as const));
+    const fallbackScanner =
+      scannerByName.get("Value + Growth Compounder") ??
+      scannerByName.get("Undervalued + Strong Fundamentals") ??
+      filtered[0];
     return FUNDAMENTAL_SCREEN_SECTIONS.map((section) => ({
       ...section,
       scans: section.scans
-        .map((item) => ({ ...item, scanner: scannerByName.get(item.matchName) }))
+        .map((item) => ({
+          ...item,
+          scanner: scannerByName.get(item.matchName) ?? fallbackScanner,
+        }))
         .filter((item): item is typeof item & { scanner: (typeof filtered)[number] } => Boolean(item.scanner)),
     }));
   }, [filtered]);
@@ -1216,28 +1427,37 @@ export function AppScannersHubPage() {
     });
   }, [liveTimeHorizon]);
 
+  const candlestickRows = useMemo(() => {
+    return CANDLESTICK_DETECTIONS.filter((row) => {
+      if (row.indexUniverse !== candlestickIndex) return false;
+      if (row.timeframe !== candlestickTimeframe) return false;
+      if (row.family !== candlestickFamily) return false;
+      return true;
+    });
+  }, [candlestickFamily, candlestickIndex, candlestickTimeframe]);
+
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-gradient-to-b from-primary/[0.03] to-background pb-24 md:pb-12">
-      {/* App canvas: mobile-first width */}
-      <div className="max-w-lg mx-auto px-4 pt-4 sm:pt-6">
+      {/* App canvas: mobile-first, widens on desktop */}
+      <div className="max-w-lg lg:max-w-6xl mx-auto px-4 pt-4 sm:pt-6">
         {/* Header */}
-        <header className="mb-5">
+        <header className="mb-5 lg:mb-8">
           <div className="flex items-start justify-between gap-3 mb-1">
             <div>
-              <h1 className="text-[28px] sm:text-[32px] font-bold text-foreground tracking-tight leading-[1.12]">
-                <span className="block">Find your next trade</span>
-                <span className="block text-[#542087]">in seconds.</span>
+              <h1 className="text-[28px] sm:text-[32px] lg:text-[36px] font-bold text-foreground tracking-tight leading-[1.12]">
+                <span className="lg:inline block">Find your next trade </span>
+                <span className="lg:inline block text-[#542087]">in seconds.</span>
               </h1>
-              <p className="text-[13px] sm:text-[14px] text-muted-foreground mt-3 leading-snug line-clamp-2">
+              <p className="text-[13px] sm:text-[14px] lg:text-[15px] text-muted-foreground mt-3 leading-snug line-clamp-2 lg:max-w-xl">
                 80+ ready scans. Build your own with 300+ indicators.
               </p>
             </div>
           </div>
         </header>
 
-        {/* Live market signals — vertical stack, dense card (mobile app) */}
-        <div className="mb-6 -mx-4 bg-white relative">
-          <section className="px-4 pt-5 pb-4" aria-label="Live market signals">
+        {/* Live market signals */}
+        <div className="mb-6 lg:mb-8 -mx-4 lg:mx-0 bg-white lg:bg-transparent relative lg:rounded-2xl">
+          <section className="px-4 lg:px-0 pt-5 pb-4" aria-label="Live market signals">
             <div className="flex items-center gap-2 min-w-0 mb-3">
               <span className="relative flex h-3 w-3 shrink-0 items-center justify-center" aria-hidden>
                 <span className="animate-[ping_0.65s_cubic-bezier(0,0,0.2,1)_infinite] absolute inline-flex h-3 w-3 rounded-full bg-red-500 opacity-75" />
@@ -1281,7 +1501,7 @@ export function AppScannersHubPage() {
                 No signals match these filters. Try a different signal type or time horizon.
               </p>
             ) : (
-              <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-0 snap-x snap-mandatory scrollbar-none">
+              <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-0 snap-x snap-mandatory scrollbar-none lg:mr-0 lg:pr-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:snap-none">
                 {liveSignalsFiltered.map((signal) => (
                   <LiveSignalCard key={signal.id} signal={signal} />
                 ))}
@@ -1290,28 +1510,24 @@ export function AppScannersHubPage() {
           </section>
         </div>
 
-        {/* Quick Scanner — mini screener */}
-        <QuickScannerSection />
-
-        <section className="mb-6" aria-label="Fundamental screens">
+        <section className="mb-6 lg:mb-8" aria-label="Fundamental screens">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xl leading-7 font-bold text-foreground">Fundamental Screens</h2>
             <Link to="/scanners" className="text-xs font-medium text-primary">
               View all
             </Link>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none">
+          <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none lg:mr-0 lg:pr-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:snap-none">
             {fundamentalScreenSections.map((section) => (
               <div
                 key={section.title}
-                className="w-[90%] min-w-[320px] max-w-[360px] shrink-0 snap-start rounded-2xl border border-border/60 bg-white overflow-hidden"
+                className="w-[90%] min-w-[320px] max-w-[360px] lg:w-full lg:min-w-0 lg:max-w-none shrink-0 snap-start rounded-2xl border border-border/60 bg-white overflow-hidden"
               >
                 <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
                     <section.Icon className="w-5 h-5 text-primary shrink-0" />
                     <h3 className="text-[15px] leading-5 font-semibold text-foreground truncate">{section.title}</h3>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground/60 shrink-0" />
                 </div>
                 <div>
                   {section.scans.map((item, idx) => (
@@ -1333,39 +1549,38 @@ export function AppScannersHubPage() {
           </div>
         </section>
 
-        <section className="mb-6" aria-label="Technical screens">
+        <section className="mb-6 lg:mb-8" aria-label="Technical screens">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xl leading-7 font-bold text-foreground">Technical Screens</h2>
             <Link to="/scanners" className="text-xs font-medium text-primary">
               View all
             </Link>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none">
+          <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none lg:mr-0 lg:pr-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:snap-none">
             {technicalScreenSections.map((section) => (
                 <div
                   key={section.title}
-                  className="w-[90%] min-w-[320px] max-w-[360px] shrink-0 snap-start rounded-2xl border border-border/60 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden"
+                  className="w-[90%] min-w-[320px] max-w-[360px] lg:w-full lg:min-w-0 lg:max-w-none shrink-0 snap-start rounded-2xl border border-border/60 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden"
                 >
                   {/* Section header */}
-                  <div className="flex items-center justify-between px-4 py-3.5 border-b border-border/50">
+                  <div className="flex items-center px-4 py-3.5 border-b border-border/50">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <section.Icon className="w-5 h-5 text-primary shrink-0" />
                       <h3 className="text-[15px] leading-5 font-semibold text-foreground truncate">
                         {section.title}
                       </h3>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground/60 shrink-0" />
                   </div>
 
                   {/* Scanner rows */}
                   <div>
-                    {section.scanners.map((scanner, rowIdx) => {
-                      const isLast = rowIdx === section.scanners.length - 1;
-                      const stockData = SCANNER_TOP_SYMBOLS[scanner.name];
+                    {section.scans.map((item, rowIdx) => {
+                      const isLast = rowIdx === section.scans.length - 1;
+                      const stockData = SCANNER_TOP_SYMBOLS[item.scanner.name];
                       return (
                         <Link
-                          key={scanner.id}
-                          to={`/scanners/${scanner.id}`}
+                          key={`${section.title}-${item.label}-${item.scanner.id}`}
+                          to={`/scanners/${item.scanner.id}`}
                           className={cn(
                             "block px-4 py-4 hover:bg-muted/30 transition-colors",
                             !isLast && "border-b border-border/50"
@@ -1374,7 +1589,7 @@ export function AppScannersHubPage() {
                           <div className="flex items-start gap-2">
                             <div className="min-w-0 flex-1">
                               <h4 className="text-[14px] leading-5 font-semibold text-foreground truncate pr-1">
-                                {scanner.name}
+                                {item.label}
                               </h4>
 
                               {/* Stock logos + last updated */}
@@ -1386,10 +1601,11 @@ export function AppScannersHubPage() {
                                 )}
                                 <span className="flex items-center gap-1 text-[10px] text-muted-foreground/70 shrink-0">
                                   <Clock className="h-2.5 w-2.5" />
-                                  {scanner.lastUpdated}
+                                  {item.scanner.lastUpdated}
                                 </span>
                               </div>
                             </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground/70 shrink-0 mt-0.5" />
                           </div>
                         </Link>
                       );
@@ -1401,14 +1617,14 @@ export function AppScannersHubPage() {
         </section>
 
         {/* DIY CTA */}
-        <Card className="border-primary/20 bg-primary/5 mb-6">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-5 h-5 text-primary" />
+        <Card className="border-primary/20 bg-primary/5 mb-6 lg:mb-8">
+          <CardContent className="p-4 lg:p-6 flex items-center gap-3 lg:gap-4">
+            <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-5 h-5 lg:w-6 lg:h-6 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground">Build your own</p>
-              <p className="text-xs text-muted-foreground">Indicators, patterns &amp; formulas — DIY screener.</p>
+              <p className="text-sm lg:text-base font-semibold text-foreground">Build your own</p>
+              <p className="text-xs lg:text-sm text-muted-foreground">Indicators, patterns &amp; formulas — DIY screener.</p>
             </div>
             <Button asChild size="sm" className="shrink-0">
               <Link to="/diy">Open</Link>
@@ -1416,11 +1632,11 @@ export function AppScannersHubPage() {
           </CardContent>
         </Card>
 
-        <section className="mb-6" aria-label="Discover opportunities">
+        <section className="mb-6 lg:mb-8" aria-label="Discover opportunities">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xl leading-7 font-bold text-foreground">Discover by trading style</h2>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {OPPORTUNITY_TRACKS.map((item) => {
               const Icon = item.icon;
               return (
@@ -1441,6 +1657,235 @@ export function AppScannersHubPage() {
             })}
           </div>
         </section>
+
+        <section className="mb-6 lg:mb-8" aria-label="Candlesticks scan">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xl leading-7 font-bold text-foreground">Candlesticks Scan</h2>
+          </div>
+
+          <div className="p-0">
+            <div className="mb-4">
+              <div className="flex h-11 items-center gap-3 overflow-x-auto whitespace-nowrap">
+                <button
+                  type="button"
+                  onClick={() => setIndexSheetOpen(true)}
+                  className={cn(
+                    "shrink-0 box-border inline-flex w-auto max-w-none items-center gap-[2px] h-[28px] rounded-[6px] border transition-colors",
+                    "pl-[10px] pr-[6px] py-[6px]",
+                    indexSheetOpen ? "bg-[#FBF8FD] border-[#37135B]" : "bg-[#FFFFFF] border-[#E1E1E1]"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "h-[16px] text-[12px] font-semibold leading-[16px] flex items-center whitespace-nowrap",
+                      indexSheetOpen ? "text-[#37135B]" : "text-[#262626]"
+                    )}
+                  >
+                    {candlestickIndex}
+                  </span>
+                  <span className="flex h-[16px] w-[16px] items-center justify-center" aria-hidden="true">
+                    <span
+                      className="h-0 w-0"
+                      style={{
+                        borderLeft: "5px solid transparent",
+                        borderRight: "5px solid transparent",
+                        borderTop: `7px solid ${indexSheetOpen ? "#37135B" : "#262626"}`,
+                      }}
+                    />
+                  </span>
+                </button>
+                <span className="h-7 w-px shrink-0 bg-[#F1F1F1]" aria-hidden />
+                <button
+                  type="button"
+                  onClick={() => setTimeframeSheetOpen(true)}
+                  className={cn(
+                    "shrink-0 box-border inline-flex w-auto max-w-none items-center gap-[2px] h-[28px] rounded-[6px] border transition-colors",
+                    "pl-[10px] pr-[6px] py-[6px]",
+                    timeframeSheetOpen ? "bg-[#FBF8FD] border-[#37135B]" : "bg-[#FFFFFF] border-[#E1E1E1]"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "h-[16px] text-[12px] font-semibold leading-[16px] flex items-center whitespace-nowrap",
+                      timeframeSheetOpen ? "text-[#37135B]" : "text-[#262626]"
+                    )}
+                  >
+                    {CANDLESTICK_TIMEFRAME_OPTIONS.find((opt) => opt.value === candlestickTimeframe)?.label ?? "Timeframe"}
+                  </span>
+                  <span className="flex h-[16px] w-[16px] items-center justify-center" aria-hidden="true">
+                    <span
+                      className="h-0 w-0"
+                      style={{
+                        borderLeft: "5px solid transparent",
+                        borderRight: "5px solid transparent",
+                        borderTop: `7px solid ${timeframeSheetOpen ? "#37135B" : "#262626"}`,
+                      }}
+                    />
+                  </span>
+                </button>
+                <div className="flex items-center gap-2">
+                  {CANDLESTICK_FAMILY_OPTIONS.map((opt) => {
+                    const active = candlestickFamily === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setCandlestickFamily(opt.value)}
+                        className={cn(
+                          "inline-flex h-7 items-center justify-center rounded-md border px-3 text-xs font-semibold",
+                          active
+                            ? "border-[#542087] bg-[#FBF8FD] text-[#542087]"
+                            : "border-[#E1E1E1] bg-white text-[#262626]"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <div className="flex items-center border-b border-border/60 px-3 py-2.5 bg-muted/20">
+                <div className="w-[120px] shrink-0 text-[10px] font-medium text-muted-foreground">Scrip</div>
+                <div className="flex-1 text-[10px] font-medium text-muted-foreground">SparkCandle</div>
+                <div className="w-[150px] shrink-0 text-right text-[10px] font-medium text-muted-foreground">Price</div>
+              </div>
+              {candlestickRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-3">
+                  No candlestick detections for selected filters.
+                </p>
+              ) : (
+                candlestickRows.map((row, idx) => {
+                  const up = row.changePct >= 0;
+                  const toneTagClass = up
+                    ? "bg-[linear-gradient(90deg,#DEF5ED_24%,rgba(114,216,181,0)_100%)] text-[#008858]"
+                    : "bg-[linear-gradient(90deg,#FCE7E7_24%,rgba(239,68,68,0)_100%)] text-[#B91C1C]";
+                  const ToneIcon = up ? TrendingUp : TrendingDown;
+                  return (
+                    <div
+                      key={`${row.symbol}-${row.detectedPattern}-${row.timeframe}`}
+                      className={cn("px-3 py-3", idx !== candlestickRows.length - 1 && "border-b border-border/50")}
+                    >
+                      <div className="grid grid-cols-[120px_1fr_150px] items-start gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-semibold text-foreground leading-5">{row.symbol}</p>
+                        </div>
+
+                        <div className="min-w-0">
+                          <img
+                            src={candlestickPatternImage(row.family)}
+                            alt={`${row.detectedPattern} pattern preview`}
+                            className="h-14 w-24 object-cover"
+                            loading="lazy"
+                          />
+                          <p className="mt-1.5 text-[12px] font-medium text-foreground leading-4 whitespace-nowrap">{row.detectedPattern}</p>
+                        </div>
+
+                        <div className="min-w-0 text-right">
+                          <p className="text-[14px] font-semibold text-foreground">{formatInr(row.ltp)}</p>
+                          <p className={cn("text-[12px] mt-0.5", up ? "text-[#008858]" : "text-[#D53627]")}>
+                            {up ? "+" : ""}{row.changeAbs.toFixed(2)} ({up ? "+" : ""}{row.changePct.toFixed(2)}%)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 flex h-6 items-center rounded-[4px] bg-[#FBF8FD] px-2 py-1">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[10px] font-medium leading-4 text-[#262626]">
+                            {candlestickOutlook(row)}
+                          </p>
+                        </div>
+                        <div className="ml-1 inline-flex h-4 items-center justify-center rounded-[4px] px-1">
+                          <span className={cn("inline-flex items-center gap-0.5 rounded-[4px] px-1 py-0 text-[10px] font-semibold leading-4", toneTagClass)}>
+                            {up ? "Bullish" : "Bearish"}
+                            <ToneIcon className="h-3 w-3" aria-hidden />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <Dialog open={indexSheetOpen} onOpenChange={setIndexSheetOpen}>
+            <DialogContent className="!p-0 !gap-0 !border-0 !shadow-none !rounded-t-2xl !rounded-b-none !bg-white w-full max-w-none h-auto max-h-[calc(100vh-20px)] overflow-hidden !left-0 !top-auto !bottom-0 !translate-x-0 !translate-y-0 sm:rounded-t-2xl [&>button]:hidden">
+              <div className="flex flex-col bg-white">
+                <div className="border-b border-[#F1F1F1] px-4 py-4">
+                  <DialogTitle className="text-[14px] font-medium leading-6 text-[#262626]">Filter by</DialogTitle>
+                </div>
+                <div className="px-4 py-3 space-y-4">
+                  {CANDLESTICK_INDEX_OPTIONS.map((opt) => {
+                    const active = candlestickIndex === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          setCandlestickIndex(opt);
+                          setIndexSheetOpen(false);
+                        }}
+                        className="flex items-center gap-2 text-left"
+                      >
+                        <span
+                          className={cn(
+                            "inline-flex h-4 w-4 items-center justify-center rounded-full border-[1.5px]",
+                            active ? "border-[#542087]" : "border-[#919191]"
+                          )}
+                        >
+                          {active ? <span className="h-2 w-2 rounded-full bg-[#542087]" /> : null}
+                        </span>
+                        <span className="text-xs font-semibold text-[#262626]">{opt}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={timeframeSheetOpen} onOpenChange={setTimeframeSheetOpen}>
+            <DialogContent className="!p-0 !gap-0 !border-0 !shadow-none !rounded-t-2xl !rounded-b-none !bg-white w-full max-w-none h-auto max-h-[calc(100vh-20px)] overflow-hidden !left-0 !top-auto !bottom-0 !translate-x-0 !translate-y-0 sm:rounded-t-2xl [&>button]:hidden">
+              <div className="flex flex-col bg-white">
+                <div className="border-b border-[#F1F1F1] px-4 py-4">
+                  <DialogTitle className="text-[14px] font-medium leading-6 text-[#262626]">Timeframe</DialogTitle>
+                </div>
+                <div className="px-4 py-3 space-y-4">
+                  {CANDLESTICK_TIMEFRAME_OPTIONS.map((opt) => {
+                    const active = candlestickTimeframe === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setCandlestickTimeframe(opt.value);
+                          setTimeframeSheetOpen(false);
+                        }}
+                        className="flex items-center gap-2 text-left"
+                      >
+                        <span
+                          className={cn(
+                            "inline-flex h-4 w-4 items-center justify-center rounded-full border-[1.5px]",
+                            active ? "border-[#542087]" : "border-[#919191]"
+                          )}
+                        >
+                          {active ? <span className="h-2 w-2 rounded-full bg-[#542087]" /> : null}
+                        </span>
+                        <span className="text-xs font-semibold text-[#262626]">{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </section>
+
+        {/* Quick Scanner — mini screener (last section) */}
+        <QuickScannerSection />
 
         {filtered.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">

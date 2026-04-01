@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { ConditionState, QueryState, ScanResultRow } from "@/types/screener";
 import { runCustomScan } from "@/lib/customScanRunner";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Loader2, Search, SlidersHorizontal, Zap, X } from "lucide-react";
+import { BellRing, Check, ChevronRight, Loader2, Pencil, Search, Share2, SlidersHorizontal, X, Zap } from "lucide-react";
 import { INDICATORS, type IndicatorDef } from "@/data/indicators";
 
 type QuickIndicator = "price" | "ema" | "rsi" | "macd";
@@ -79,6 +80,37 @@ type TechnicalCriteria = {
   value: number;
   min: number;
   max: number;
+};
+
+export type QuickScreenerSnapshot = {
+  indicator: QuickIndicator;
+  rsiMode: RsiMode;
+  rsiMin: number;
+  rsiMax: number;
+  rsiIntervalId: string;
+  emaSide: EmaSide;
+  emaIntervalId: string;
+  macdSide: MacdSide;
+  macdIntervalId: string;
+  priceMode: PriceMode;
+  priceMin: number;
+  priceMax: number;
+  priceIntervalId: string;
+  candlestickFilters: string[];
+  valuationFilters: string[];
+  incomeGrowthFilters: string[];
+  balanceSheetFilters: string[];
+  technicalFilters: string[];
+  candlestickCriteriaByIndicator: Record<string, { timeframeId: string }>;
+  valuationCriteriaByIndicator: Record<string, ValuationCriteria>;
+  incomeGrowthCriteriaByIndicator: Record<string, IncomeGrowthCriteria>;
+  balanceSheetCriteriaByIndicator: Record<string, BalanceSheetCriteria>;
+  technicalCriteriaByIndicator: Record<string, TechnicalCriteria>;
+};
+
+type QuickScannerSectionProps = {
+  fullScreen?: boolean;
+  initialState?: QuickScreenerSnapshot;
 };
 
 const TECHNICAL_MA_BENCHMARK_LENGTHS = [9, 20, 21, 50, 100, 200] as const;
@@ -892,6 +924,13 @@ const DEMO_SCRIPTS: { symbol: string; name: string; ltp: number; change1d: numbe
   { symbol: "HDFCBANK", name: "HDFC Bank", ltp: 412.34, change1d: 4.5 },
   { symbol: "YESBANK", name: "Yes Bank", ltp: 7423.21, change1d: 4.5 },
   { symbol: "ICICIBANK", name: "ICICI Bank", ltp: 101.34, change1d: -0.2 },
+  { symbol: "RELIANCE", name: "Reliance Industries", ltp: 2921.45, change1d: 1.2 },
+  { symbol: "TCS", name: "Tata Consultancy Services", ltp: 4185.2, change1d: 0.9 },
+  { symbol: "INFY", name: "Infosys", ltp: 1823.15, change1d: 1.1 },
+  { symbol: "ITC", name: "ITC", ltp: 468.55, change1d: -0.4 },
+  { symbol: "SBIN", name: "State Bank of India", ltp: 812.75, change1d: 2.1 },
+  { symbol: "LT", name: "Larsen & Toubro", ltp: 3590.6, change1d: 1.7 },
+  { symbol: "HINDUNILVR", name: "Hindustan Unilever", ltp: 2529.8, change1d: -0.3 },
 ];
 
 function getDemoIndicatorColumnConfig({
@@ -991,70 +1030,74 @@ function buildDemoScanResults({
   });
 }
 
-export function QuickScannerSection() {
-  const [indicator, setIndicator] = useState<QuickIndicator>("rsi");
+export function QuickScannerSection({ fullScreen = false, initialState }: QuickScannerSectionProps = {}) {
+  const navigate = useNavigate();
+  const [indicator, setIndicator] = useState<QuickIndicator>(initialState?.indicator ?? "rsi");
 
   // RSI config (limited)
-  const [rsiMode, setRsiMode] = useState<RsiMode>("below");
-  const [rsiMin, setRsiMin] = useState(30);
-  const [rsiMax, setRsiMax] = useState(70);
+  const [rsiMode, setRsiMode] = useState<RsiMode>(initialState?.rsiMode ?? "below");
+  const [rsiMin, setRsiMin] = useState(initialState?.rsiMin ?? 30);
+  const [rsiMax, setRsiMax] = useState(initialState?.rsiMax ?? 70);
   const [rsiPeriod] = useState(14);
-  const [rsiIntervalId, setRsiIntervalId] = useState<string>("15m");
+  const [rsiIntervalId, setRsiIntervalId] = useState<string>(initialState?.rsiIntervalId ?? "15m");
 
   // EMA config (limited)
-  const [emaSide, setEmaSide] = useState<EmaSide>("above");
+  const [emaSide, setEmaSide] = useState<EmaSide>(initialState?.emaSide ?? "above");
   const [emaPeriod] = useState(20);
-  const [emaIntervalId, setEmaIntervalId] = useState<string>("15m");
+  const [emaIntervalId, setEmaIntervalId] = useState<string>(initialState?.emaIntervalId ?? "15m");
 
   // MACD config (limited)
-  const [macdSide, setMacdSide] = useState<MacdSide>("bullish");
+  const [macdSide, setMacdSide] = useState<MacdSide>(initialState?.macdSide ?? "bullish");
   const [macdFast] = useState(12);
   const [macdSlow] = useState(26);
   const [macdSignal] = useState(9);
-  const [macdIntervalId, setMacdIntervalId] = useState<string>("15m");
+  const [macdIntervalId, setMacdIntervalId] = useState<string>(initialState?.macdIntervalId ?? "15m");
 
   // Price config (limited)
-  const [priceMode, setPriceMode] = useState<PriceMode>("above");
-  const [priceMin, setPriceMin] = useState(1);
-  const [priceMax, setPriceMax] = useState(5);
-  const [priceIntervalId, setPriceIntervalId] = useState<string>("15m");
+  const [priceMode, setPriceMode] = useState<PriceMode>(initialState?.priceMode ?? "above");
+  const [priceMin, setPriceMin] = useState(initialState?.priceMin ?? 1);
+  const [priceMax, setPriceMax] = useState(initialState?.priceMax ?? 5);
+  const [priceIntervalId, setPriceIntervalId] = useState<string>(initialState?.priceIntervalId ?? "15m");
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [catalogGroup, setCatalogGroup] = useState<string>("Price");
   const [catalogSearch, setCatalogSearch] = useState("");
-  const [candlestickFilters, setCandlestickFilters] = useState<string[]>([]);
+  const [candlestickFilters, setCandlestickFilters] = useState<string[]>(initialState?.candlestickFilters ?? []);
   const [activeCandlestickFilter, setActiveCandlestickFilter] = useState<string | null>(null);
   const [candlestickConfigOpen, setCandlestickConfigOpen] = useState(false);
-  const [candlestickCriteriaByIndicator, setCandlestickCriteriaByIndicator] = useState<Record<string, { timeframeId: string }>>({});
+  const [candlestickCriteriaByIndicator, setCandlestickCriteriaByIndicator] = useState<Record<string, { timeframeId: string }>>(initialState?.candlestickCriteriaByIndicator ?? {});
   const [candlestickDraft, setCandlestickDraft] = useState<{ timeframeId: string }>({ timeframeId: "15m" });
-  const [valuationFilters, setValuationFilters] = useState<string[]>([]);
+  const [valuationFilters, setValuationFilters] = useState<string[]>(initialState?.valuationFilters ?? []);
   const [activeValuationFilter, setActiveValuationFilter] = useState<string | null>(null);
   const [valuationConfigOpen, setValuationConfigOpen] = useState(false);
-  const [valuationCriteriaByIndicator, setValuationCriteriaByIndicator] = useState<Record<string, ValuationCriteria>>({});
+  const [valuationCriteriaByIndicator, setValuationCriteriaByIndicator] = useState<Record<string, ValuationCriteria>>(initialState?.valuationCriteriaByIndicator ?? {});
   const [valuationDraft, setValuationDraft] = useState<ValuationCriteria>(DEFAULT_VALUATION_CRITERIA);
-  const [incomeGrowthFilters, setIncomeGrowthFilters] = useState<string[]>([]);
+  const [incomeGrowthFilters, setIncomeGrowthFilters] = useState<string[]>(initialState?.incomeGrowthFilters ?? []);
   const [activeIncomeGrowthFilter, setActiveIncomeGrowthFilter] = useState<string | null>(null);
   const [incomeGrowthConfigOpen, setIncomeGrowthConfigOpen] = useState(false);
-  const [incomeGrowthCriteriaByIndicator, setIncomeGrowthCriteriaByIndicator] = useState<Record<string, IncomeGrowthCriteria>>({});
+  const [incomeGrowthCriteriaByIndicator, setIncomeGrowthCriteriaByIndicator] = useState<Record<string, IncomeGrowthCriteria>>(initialState?.incomeGrowthCriteriaByIndicator ?? {});
   const [incomeGrowthDraft, setIncomeGrowthDraft] = useState<IncomeGrowthCriteria>(DEFAULT_INCOME_GROWTH_CRITERIA);
-  const [balanceSheetFilters, setBalanceSheetFilters] = useState<string[]>([]);
+  const [balanceSheetFilters, setBalanceSheetFilters] = useState<string[]>(initialState?.balanceSheetFilters ?? []);
   const [activeBalanceSheetFilter, setActiveBalanceSheetFilter] = useState<string | null>(null);
   const [balanceSheetConfigOpen, setBalanceSheetConfigOpen] = useState(false);
-  const [balanceSheetCriteriaByIndicator, setBalanceSheetCriteriaByIndicator] = useState<Record<string, BalanceSheetCriteria>>({});
+  const [balanceSheetCriteriaByIndicator, setBalanceSheetCriteriaByIndicator] = useState<Record<string, BalanceSheetCriteria>>(initialState?.balanceSheetCriteriaByIndicator ?? {});
   const [balanceSheetDraft, setBalanceSheetDraft] = useState<BalanceSheetCriteria>(DEFAULT_BALANCE_SHEET_CRITERIA);
-  const [technicalFilters, setTechnicalFilters] = useState<string[]>([]);
+  const [technicalFilters, setTechnicalFilters] = useState<string[]>(initialState?.technicalFilters ?? []);
   const [activeTechnicalFilter, setActiveTechnicalFilter] = useState<string | null>(null);
   const [technicalConfigOpen, setTechnicalConfigOpen] = useState(false);
-  const [technicalCriteriaByIndicator, setTechnicalCriteriaByIndicator] = useState<Record<string, TechnicalCriteria>>({});
+  const [technicalCriteriaByIndicator, setTechnicalCriteriaByIndicator] = useState<Record<string, TechnicalCriteria>>(initialState?.technicalCriteriaByIndicator ?? {});
   const [technicalDraft, setTechnicalDraft] = useState<TechnicalCriteria>(DEFAULT_TECHNICAL_CRITERIA);
 
-  const [isDemo, setIsDemo] = useState(true);
+  const [isDemo, setIsDemo] = useState(!fullScreen);
   const [results, setResults] = useState<ScanResultRow[]>([]);
   const [matchedHint, setMatchedHint] = useState<string>("Apply to see matches");
 
   const [isApplying, setIsApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [shouldOpenFullScreenerOnApply, setShouldOpenFullScreenerOnApply] = useState(false);
+  const [screenerName, setScreenerName] = useState(fullScreen ? "Untitled Screener" : "Quick Screener");
+  const [isEditingScreenerName, setIsEditingScreenerName] = useState(false);
   const activeFilterCount =
     1 +
     candlestickFilters.length +
@@ -1062,6 +1105,63 @@ export function QuickScannerSection() {
     incomeGrowthFilters.length +
     balanceSheetFilters.length +
     technicalFilters.length;
+
+  const appliedResultColumns = useMemo(() => {
+    if (!fullScreen) return [] as Array<{ key: string; label: string }>;
+    const cols: Array<{ key: string; label: string }> = [];
+    const seen = new Set<string>();
+    const pushCol = (key: string, label: string) => {
+      if (seen.has(key)) return;
+      seen.add(key);
+      cols.push({ key, label });
+    };
+    const addFromIndicatorId = (indicatorId: string, label: string, params: Record<string, number | string>) => {
+      const def = INDICATORS.find((i) => i.id === indicatorId);
+      if (!def || def.outputType !== "numeric") return;
+      const keyParts = def.params.filter((p) => p.type === "number").map((p) => String(params[p.key] ?? p.defaultValue));
+      const key = keyParts.length > 0 ? `${indicatorId}_${keyParts.join("_")}` : indicatorId;
+      pushCol(key, label);
+    };
+
+    if (indicator === "rsi") addFromIndicatorId("rsi", `RSI(${rsiPeriod})`, { period: rsiPeriod });
+    else if (indicator === "ema") addFromIndicatorId("ema", `EMA(${emaPeriod})`, { period: emaPeriod });
+    else if (indicator === "macd") addFromIndicatorId("macd_line", "MACD", { fast: macdFast, slow: macdSlow, signal: macdSignal });
+    else addFromIndicatorId("change_1d_pct", "1D Change %", {});
+
+    for (const label of technicalFilters) {
+      const def = getTechnicalIndicatorDef(label);
+      if (def.outputType === "pattern") continue;
+      const crit = technicalCriteriaByIndicator[label];
+      const params: Record<string, number | string> = {};
+      for (const p of def.params) {
+        if (p.type === "number") params[p.key] = crit?.paramValues[p.key] ?? p.defaultValue;
+        if (p.type === "select") params[p.key] = crit?.paramSelect[p.key] ?? p.defaultValue;
+      }
+      const nums = def.params.filter((p) => p.type === "number").map((p) => params[p.key]);
+      const display = nums.length > 0 ? `${label}(${nums.join(",")})` : label;
+      addFromIndicatorId(def.id, display, params);
+    }
+
+    for (const label of [...valuationFilters, ...incomeGrowthFilters, ...balanceSheetFilters]) {
+      const def = INDICATORS.find((i) => i.name === label);
+      if (!def || def.outputType !== "numeric") continue;
+      addFromIndicatorId(def.id, label, {});
+    }
+    return cols;
+  }, [
+    fullScreen,
+    indicator,
+    rsiPeriod,
+    emaPeriod,
+    macdFast,
+    macdSlow,
+    macdSignal,
+    technicalFilters,
+    technicalCriteriaByIndicator,
+    valuationFilters,
+    incomeGrowthFilters,
+    balanceSheetFilters,
+  ]);
 
   useEffect(() => {
     if (!isDemo) return;
@@ -1117,6 +1217,7 @@ export function QuickScannerSection() {
   function openFor(ind: QuickIndicator) {
     setIndicator(ind);
     setIsDemo(true);
+    setShouldOpenFullScreenerOnApply(false);
     setFilterOpen(true);
   }
 
@@ -1303,15 +1404,129 @@ export function QuickScannerSection() {
     try {
       const { query } = buildQuery();
       const matches = await runCustomScan(query);
-      setResults(matches.slice(0, 8));
+      setResults(fullScreen ? matches : matches.slice(0, 8));
       setMatchedHint(`${matches.length} match${matches.length === 1 ? "" : "es"} found`);
+      if (!fullScreen && shouldOpenFullScreenerOnApply) {
+        const snapshot: QuickScreenerSnapshot = {
+          indicator,
+          rsiMode,
+          rsiMin,
+          rsiMax,
+          rsiIntervalId,
+          emaSide,
+          emaIntervalId,
+          macdSide,
+          macdIntervalId,
+          priceMode,
+          priceMin,
+          priceMax,
+          priceIntervalId,
+          candlestickFilters,
+          valuationFilters,
+          incomeGrowthFilters,
+          balanceSheetFilters,
+          technicalFilters,
+          candlestickCriteriaByIndicator,
+          valuationCriteriaByIndicator,
+          incomeGrowthCriteriaByIndicator,
+          balanceSheetCriteriaByIndicator,
+          technicalCriteriaByIndicator,
+        };
+        navigate("/diy", { state: { quickFullScreen: true, quickQuery: query, quickSnapshot: snapshot } });
+      }
     } catch (e) {
-      setApplyError(e instanceof Error ? e.message : String(e));
-      setResults([]);
-      setMatchedHint("Could not run quick scan");
+      const demo = buildDemoScanResults({
+        indicator,
+        rsiMode,
+        rsiMin,
+        rsiMax,
+        emaSide,
+        macdSide,
+        priceMode,
+        priceMin,
+        priceMax,
+        rsiPeriod,
+        emaPeriod,
+        macdFast,
+        macdSlow,
+        macdSignal,
+      });
+      setApplyError(null);
+      setIsDemo(true);
+      setResults(fullScreen ? demo : demo.slice(0, 8));
+      setMatchedHint("Demo matches");
     } finally {
       setIsApplying(false);
+      setShouldOpenFullScreenerOnApply(false);
     }
+  }
+
+  useEffect(() => {
+    if (!fullScreen) return;
+    setApplyError(null);
+    setIsDemo(false);
+    setIsApplying(true);
+    const { query } = buildQuery();
+    runCustomScan(query)
+      .then((matches) => {
+        setResults(matches);
+        setMatchedHint(`${matches.length} match${matches.length === 1 ? "" : "es"} found`);
+      })
+      .catch(() => {
+        const demo = buildDemoScanResults({
+          indicator,
+          rsiMode,
+          rsiMin,
+          rsiMax,
+          emaSide,
+          macdSide,
+          priceMode,
+          priceMin,
+          priceMax,
+          rsiPeriod,
+          emaPeriod,
+          macdFast,
+          macdSlow,
+          macdSignal,
+        });
+        setApplyError(null);
+        setIsDemo(true);
+        setResults(demo);
+        setMatchedHint("Demo matches");
+      })
+      .finally(() => setIsApplying(false));
+    // Run once for initial full-screen load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullScreen]);
+
+  function navigateToFullScreenQuick() {
+    const { query } = buildQuery();
+    const snapshot: QuickScreenerSnapshot = {
+      indicator,
+      rsiMode,
+      rsiMin,
+      rsiMax,
+      rsiIntervalId,
+      emaSide,
+      emaIntervalId,
+      macdSide,
+      macdIntervalId,
+      priceMode,
+      priceMin,
+      priceMax,
+      priceIntervalId,
+      candlestickFilters,
+      valuationFilters,
+      incomeGrowthFilters,
+      balanceSheetFilters,
+      technicalFilters,
+      candlestickCriteriaByIndicator,
+      valuationCriteriaByIndicator,
+      incomeGrowthCriteriaByIndicator,
+      balanceSheetCriteriaByIndicator,
+      technicalCriteriaByIndicator,
+    };
+    navigate("/diy", { state: { quickFullScreen: true, quickQuery: query, quickSnapshot: snapshot } });
   }
 
   const quickTabs: { key: QuickIndicator; label: string }[] = [
@@ -1403,13 +1618,17 @@ export function QuickScannerSection() {
   function handleCatalogItemClick(item: string, group: string = catalogGroup) {
     // For app scanner copy: selected fundamental indicators become additional quick filters.
     if (group === "Candlesticks") {
+      const isNewlyAdded = !candlestickFilters.includes(item);
       setCandlestickFilters((prev) => (prev.includes(item) ? prev : [...prev, item]));
+      setShouldOpenFullScreenerOnApply(isNewlyAdded);
       setCatalogOpen(false);
       openCandlestickCriteria(item);
       return;
     }
     if (group === "Technicals") {
+      const isNewlyAdded = !technicalFilters.includes(item);
       setTechnicalFilters((prev) => (prev.includes(item) ? prev : [...prev, item]));
+      setShouldOpenFullScreenerOnApply(isNewlyAdded);
       setActiveTechnicalFilter(item);
       setCatalogOpen(false);
       openTechnicalCriteria(item);
@@ -1423,7 +1642,9 @@ export function QuickScannerSection() {
       group === "Volume & Delivery" ||
       group === "Shareholding"
     ) {
+      const isNewlyAdded = !valuationFilters.includes(item);
       setValuationFilters((prev) => (prev.includes(item) ? prev : [...prev, item]));
+      setShouldOpenFullScreenerOnApply(isNewlyAdded);
       setCatalogOpen(false);
       // Route through the centralized open handler so indicator-specific rules
       // (industry comparison allowed vs range-only) are always applied.
@@ -1431,13 +1652,17 @@ export function QuickScannerSection() {
       return;
     }
     if (group === "Income & Growth") {
+      const isNewlyAdded = !incomeGrowthFilters.includes(item);
       setIncomeGrowthFilters((prev) => (prev.includes(item) ? prev : [...prev, item]));
+      setShouldOpenFullScreenerOnApply(isNewlyAdded);
       setCatalogOpen(false);
       openIncomeGrowthCriteria(item);
       return;
     }
     if (group === "Balance Sheet") {
+      const isNewlyAdded = !balanceSheetFilters.includes(item);
       setBalanceSheetFilters((prev) => (prev.includes(item) ? prev : [...prev, item]));
+      setShouldOpenFullScreenerOnApply(isNewlyAdded);
       setCatalogOpen(false);
       openBalanceSheetCriteria(item);
     }
@@ -1457,6 +1682,10 @@ export function QuickScannerSection() {
       [activeCandlestickFilter]: { ...candlestickDraft },
     }));
     setCandlestickConfigOpen(false);
+    if (!fullScreen && shouldOpenFullScreenerOnApply) {
+      setShouldOpenFullScreenerOnApply(false);
+      navigateToFullScreenQuick();
+    }
   }
 
   function openTechnicalCriteria(indicatorLabel: string) {
@@ -1474,6 +1703,10 @@ export function QuickScannerSection() {
       [activeTechnicalFilter]: { ...technicalDraft },
     }));
     setTechnicalConfigOpen(false);
+    if (!fullScreen && shouldOpenFullScreenerOnApply) {
+      setShouldOpenFullScreenerOnApply(false);
+      navigateToFullScreenQuick();
+    }
   }
 
   function openValuationCriteria(indicatorLabel: string) {
@@ -1502,6 +1735,10 @@ export function QuickScannerSection() {
       },
     }));
     setValuationConfigOpen(false);
+    if (!fullScreen && shouldOpenFullScreenerOnApply) {
+      setShouldOpenFullScreenerOnApply(false);
+      navigateToFullScreenQuick();
+    }
   }
 
   function openIncomeGrowthCriteria(indicatorLabel: string) {
@@ -1526,6 +1763,10 @@ export function QuickScannerSection() {
       },
     }));
     setIncomeGrowthConfigOpen(false);
+    if (!fullScreen && shouldOpenFullScreenerOnApply) {
+      setShouldOpenFullScreenerOnApply(false);
+      navigateToFullScreenQuick();
+    }
   }
 
   function openBalanceSheetCriteria(indicatorLabel: string) {
@@ -1550,32 +1791,81 @@ export function QuickScannerSection() {
       },
     }));
     setBalanceSheetConfigOpen(false);
+    if (!fullScreen && shouldOpenFullScreenerOnApply) {
+      setShouldOpenFullScreenerOnApply(false);
+      navigateToFullScreenQuick();
+    }
   }
 
   return (
-    <div className="mb-5 -mx-4 bg-white shadow-[0_2px_8px_rgba(158,144,99,0.16)]" aria-label="Quick scanner">
-      <div className="px-4 py-4">
+    <div className={cn(fullScreen ? "mb-6 bg-white" : "mb-5 -mx-4 bg-white shadow-[0_2px_8px_rgba(158,144,99,0.16)]")} aria-label="Quick scanner">
+      <div className={cn(fullScreen ? "px-0 py-4 pb-24" : "px-4 py-4")}>
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <Zap className="w-4 h-4 text-primary" />
-              </div>
+              {!fullScreen ? (
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Zap className="w-4 h-4 text-primary" />
+                </div>
+              ) : null}
               <div className="min-w-0">
-                <p className="text-xl leading-7 font-bold text-foreground">Quick Screener</p>
+                <div className="flex items-center gap-2">
+                  {fullScreen && isEditingScreenerName ? (
+                    <Input
+                      value={screenerName}
+                      onChange={(e) => setScreenerName(e.target.value)}
+                      onBlur={() => {
+                        if (!screenerName.trim()) setScreenerName("Untitled Screener");
+                        setIsEditingScreenerName(false);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          if (!screenerName.trim()) setScreenerName("Untitled Screener");
+                          setIsEditingScreenerName(false);
+                        }
+                      }}
+                      autoFocus
+                      className="h-8 w-[240px] border-[#E1E1E1] focus-visible:ring-[#542087]"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fullScreen && setIsEditingScreenerName(true)}
+                      className="inline-flex items-center gap-2 text-left"
+                    >
+                      <p className="text-xl leading-7 font-bold text-foreground">{fullScreen ? screenerName : "Quick Screener"}</p>
+                      {fullScreen ? <Pencil className="h-4 w-4 text-[#777777]" /> : null}
+                    </button>
+                  )}
+                  {fullScreen && isEditingScreenerName ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!screenerName.trim()) setScreenerName("Untitled Screener");
+                        setIsEditingScreenerName(false);
+                      }}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#E1E1E1]"
+                      aria-label="Save screener name"
+                    >
+                      <Check className="h-4 w-4 text-[#542087]" />
+                    </button>
+                  ) : null}
+                </div>
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  Mini filter for beginners: one idea, fast matches.
+                  {fullScreen ? "Full screener with all matching stocks." : "Mini filter for beginners: one idea, fast matches."}
                 </p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-0 text-xs font-semibold text-[#777777] hover:text-[#262626]"
-              onClick={clearAll}
-              disabled={isApplying}
-            >
-              Clear All
-            </Button>
+            {!fullScreen ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-0 text-xs font-semibold text-[#777777] hover:text-[#262626]"
+                onClick={clearAll}
+                disabled={isApplying}
+              >
+                Clear All
+              </Button>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-3 px-3 scrollbar-none">
@@ -1824,11 +2114,18 @@ export function QuickScannerSection() {
 
           {/* Results list (multi-column, horizontally scrollable) */}
           <div className="bg-white overflow-x-auto">
-            <div className="min-w-[504px]">
+            <div className={cn("min-w-[504px]", fullScreen && appliedResultColumns.length > 0 && "min-w-[880px]")}>
               <div className="flex items-center h-6 bg-[#F9F9F9] border-b border-[#F1F1F1]">
                 <div className="w-[204px] px-4 text-[10px] leading-4 font-medium text-[#777777]">Scrip</div>
                 <div className="w-[100px] px-4 text-right text-[10px] leading-4 font-medium text-[#777777]">Price</div>
                 <div className="w-[100px] px-4 text-right text-[10px] leading-4 font-medium text-[#777777]">% change</div>
+                {fullScreen
+                  ? appliedResultColumns.map((col) => (
+                    <div key={col.key} className="w-[120px] px-4 text-right text-[10px] leading-4 font-medium text-[#777777] truncate">
+                      {col.label}
+                    </div>
+                  ))
+                  : null}
                 <div className="w-[100px] px-4 text-right text-[10px] leading-4 font-medium text-[#777777]">Low</div>
               </div>
             {isApplying ? (
@@ -1839,12 +2136,12 @@ export function QuickScannerSection() {
               <div className="p-4 text-sm text-muted-foreground">{matchedHint}</div>
             ) : (
               <div className="bg-white">
-                {results.map((r) => {
+                {results.map((r, idx) => {
                   const changeColor = r.change1d >= 0 ? "text-[#008858]" : "text-[#D53627]";
                   const dayLow = r.close * (1 - Math.abs(r.change1d) / 200);
 
                   return (
-                    <div key={r.symbol} className="flex items-center h-[60px] border-b border-[#F1F1F1]">
+                    <div key={r.symbol} className={cn("flex items-center h-[60px] border-b border-[#F1F1F1]", fullScreen && idx === results.length - 1 && "border-b-0")}>
                       <div className="w-[204px] px-3 py-3">
                         <p className="text-[14px] leading-5 font-medium text-[#262626] truncate">{r.symbol}</p>
                         <p className="text-[12px] leading-4 text-[#777777] truncate">{r.name}</p>
@@ -1859,6 +2156,18 @@ export function QuickScannerSection() {
                           {formatMaybePct(r.change1d)}
                         </p>
                       </div>
+                      {fullScreen
+                        ? appliedResultColumns.map((col) => {
+                          const raw = r.indicatorValues[col.key];
+                          return (
+                            <div key={`${r.symbol}-${col.key}`} className="w-[120px] px-3 text-right">
+                              <p className="text-[14px] leading-5 font-medium text-[#262626] tabular-nums">
+                                {typeof raw === "number" && Number.isFinite(raw) ? raw.toFixed(2) : "—"}
+                              </p>
+                            </div>
+                          );
+                        })
+                        : null}
 
                       <div className="w-[100px] px-3 text-right">
                         <p className="text-[14px] leading-5 font-medium text-[#262626] tabular-nums">{formatInr(dayLow)}</p>
@@ -1875,6 +2184,48 @@ export function QuickScannerSection() {
               {applyError}
             </p>
           )}
+          {fullScreen ? (
+            <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#E9E1F2] bg-white/95 backdrop-blur">
+              <div className="mx-auto w-full max-w-[1200px] px-4 py-3 lg:px-6">
+                <div className="flex items-center justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsEditingScreenerName(true)}
+                    className="h-12 w-12 border-[#E1E1E1] text-[#777777] hover:text-[#262626] hover:bg-white"
+                    aria-label="Edit screener"
+                    title="Edit screener"
+                  >
+                    <Pencil className="h-5 w-5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-12 w-12 border-[#E1E1E1] text-[#777777] hover:text-[#262626] hover:bg-white"
+                    aria-label="Share screener"
+                    title="Share screener"
+                  >
+                    <Share2 className="h-5 w-5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-12 w-12 border-[#E1E1E1] text-[#777777] hover:text-[#262626] hover:bg-white"
+                    aria-label="Set alerts"
+                    title="Set alerts"
+                  >
+                    <BellRing className="h-5 w-5" />
+                  </Button>
+                  <Button className="h-12 min-w-[170px] px-8 bg-[#542087] text-white hover:bg-[#4A1C78] text-lg font-semibold shadow-[0_6px_16px_rgba(84,32,135,0.28)]">
+                    Save
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
       </div>
 
       {/* Filter dialog */}

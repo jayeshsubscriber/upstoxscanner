@@ -53,7 +53,7 @@ export function ScannerDetailPage() {
   };
 
   return (
-    <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-8">
+    <div className="w-full px-4 py-8 sm:px-6 lg:px-8">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
         <Link to="/scanners" className="hover:text-primary flex items-center gap-1">
