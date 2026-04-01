@@ -4,24 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   ArrowRight, TrendingUp, Zap, Bell, Users, Shield,
-  ChevronRight, BarChart2, Star, Clock, BookOpen,
+  ChevronRight, BarChart2, Star, BookOpen,
 } from "lucide-react";
-import {
-  PRE_BUILT_SCANNERS, MARKETPLACE_SCREENERS,
-  PERSONA_COLORS, PERSONA_LABELS, formatCount, type ScannerPersona,
-} from "@/data/mockData";
+import { MARKETPLACE_SCREENERS, formatCount } from "@/data/mockData";
 import { AppScannersHubMarketSections } from "@/components/scanner/AppScannersHubMarketSections";
 
-const TRENDING_SCANNERS = PRE_BUILT_SCANNERS.filter(s => s.plan === "free").slice(0, 6);
 const TOP_MARKETPLACE = MARKETPLACE_SCREENERS.filter(s => s.isEditorChoice || s.isFeatured).slice(0, 3);
-
-const PERSONA_META: { key: ScannerPersona; label: string; icon: string; desc: string; color: string }[] = [
-  { key: "intraday", label: "Intraday", icon: "⚡", desc: "Gap-ups, ORB, VWAP, Volume shockers", color: "border-orange-200 bg-orange-50 hover:bg-orange-100" },
-  { key: "btst", label: "BTST", icon: "🌙", desc: "Closing range, 3:25 PM momentum, NR7", color: "border-blue-200 bg-blue-50 hover:bg-blue-100" },
-  { key: "swing", label: "Swing", icon: "📈", desc: "52W breakout, BB squeeze, EMA bounce", color: "border-green-200 bg-green-50 hover:bg-green-100" },
-  { key: "positional", label: "Positional", icon: "🏦", desc: "FII buying, sector leaders, RS screens", color: "border-purple-200 bg-purple-50 hover:bg-purple-100" },
-  { key: "longterm", label: "Long-Term", icon: "💎", desc: "Value, dividends, quality compounders", color: "border-teal-200 bg-teal-50 hover:bg-teal-100" },
-];
 
 const STATS = [
   { value: "50+", label: "Pre-built Scanners" },
@@ -32,30 +20,29 @@ const STATS = [
 
 export function HomePage() {
   return (
-    <div className="max-w-screen-xl mx-auto px-4 sm:px-6">
+    <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Hero */}
-      <section className="py-16 sm:py-24 text-center">
-        <Badge className="mb-6 bg-primary/10 text-primary border-0 px-4 py-1.5 text-sm font-medium">
+      <section className="py-10 sm:py-12 text-center">
+        <Badge className="mb-4 bg-primary/10 text-primary border-0 px-3 py-1 text-xs sm:text-sm font-medium">
           <Zap className="w-3.5 h-3.5 mr-1.5" />
           Real-time Stock Scanners for Indian Markets
         </Badge>
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6">
+        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground leading-tight mb-4">
           Find your next trade<br />
           <span className="text-primary">in seconds.</span>
         </h1>
-        <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-          50+ pre-built scanners for every trader. Build custom screeners with 100+ indicators.
-          Get real-time alerts. Trade directly from results.
+        <p className="text-sm sm:text-base text-muted-foreground max-w-3xl mx-auto mb-6">
+          50+ ready scanners, 100+ indicators, real-time alerts, and instant trade execution.
         </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Button asChild size="lg" className="gap-2 h-12 px-8 text-base">
+        <div className="flex flex-col sm:flex-row gap-2.5 justify-center">
+          <Button asChild size="lg" className="gap-2 h-11 px-7 text-sm sm:text-base">
             <Link to="/scanners">
               <TrendingUp className="w-5 h-5" />
               Explore Scanners
               <ArrowRight className="w-4 h-4" />
             </Link>
           </Button>
-          <Button asChild variant="outline" size="lg" className="gap-2 h-12 px-8 text-base border-primary/30 text-primary hover:bg-primary/5">
+          <Button asChild variant="outline" size="lg" className="gap-2 h-11 px-7 text-sm sm:text-base border-primary/30 text-primary hover:bg-primary/5">
             <Link to="/diy">
               <BarChart2 className="w-4 h-4" />
               Build My Screener
@@ -64,103 +51,19 @@ export function HomePage() {
         </div>
 
         {/* Stats */}
-        <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-2xl mx-auto">
+        <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto">
           {STATS.map((s) => (
             <div key={s.label} className="text-center">
-              <div className="text-3xl font-bold text-primary">{s.value}</div>
-              <div className="text-sm text-muted-foreground mt-1">{s.label}</div>
+              <div className="text-2xl sm:text-3xl font-bold text-primary">{s.value}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground mt-1">{s.label}</div>
             </div>
           ))}
         </div>
       </section>
 
-      <div className="mb-12 -mx-4 sm:-mx-6 px-4 sm:px-6 py-6 sm:py-8">
-        <div className="max-w-lg lg:max-w-6xl mx-auto">
-          <AppScannersHubMarketSections />
-        </div>
+      <div className="mb-10 w-full py-3 sm:py-5">
+        <AppScannersHubMarketSections />
       </div>
-
-      {/* Scanner Categories */}
-      <section className="mb-16">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-foreground">Scan by Trader Type</h2>
-            <p className="text-muted-foreground text-sm mt-1">Pre-built scanners for every trading style</p>
-          </div>
-          <Button asChild variant="ghost" size="sm" className="gap-1 text-primary">
-            <Link to="/scanners">View all <ChevronRight className="w-4 h-4" /></Link>
-          </Button>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {PERSONA_META.map((p) => (
-            <Link
-              key={p.key}
-              to={`/scanners?persona=${p.key}`}
-              className={`rounded-xl border p-4 cursor-pointer transition-all hover:shadow-sm ${p.color}`}
-            >
-              <div className="text-2xl mb-2">{p.icon}</div>
-              <div className="font-semibold text-sm text-foreground">{p.label}</div>
-              <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{p.desc}</div>
-              <div className="text-xs text-primary font-medium mt-2 flex items-center gap-1">
-                {PRE_BUILT_SCANNERS.filter(s => s.persona === p.key).length} scanners
-                <ArrowRight className="w-3 h-3" />
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* Trending Scanners */}
-      <section className="mb-16">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-foreground">Trending Today</h2>
-            <p className="text-muted-foreground text-sm mt-1">Most used scanners in the last 24 hours</p>
-          </div>
-          <Button asChild variant="ghost" size="sm" className="gap-1 text-primary">
-            <Link to="/scanners">View all <ChevronRight className="w-4 h-4" /></Link>
-          </Button>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {TRENDING_SCANNERS.map((scanner) => (
-            <Link key={scanner.id} to={`/scanners/${scanner.id}`}>
-              <Card className="h-full hover:shadow-md hover:border-primary/30 transition-all cursor-pointer group">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge className={`text-[10px] px-2 py-0 h-5 border-0 font-medium ${PERSONA_COLORS[scanner.persona]}`}>
-                        {PERSONA_LABELS[scanner.persona]}
-                      </Badge>
-                      {scanner.plan === "plus" && (
-                        <Badge className="text-[10px] px-2 py-0 h-5 bg-gradient-to-r from-[#542087] to-[#7c3abf] text-white border-0">
-                          <Zap className="w-2.5 h-2.5 mr-0.5" />PLUS
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 text-muted-foreground text-xs shrink-0">
-                      <Clock className="w-3 h-3" />
-                      {scanner.lastUpdated}
-                    </div>
-                  </div>
-                  <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors mb-1">
-                    {scanner.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{scanner.description}</p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="font-semibold text-foreground">{scanner.resultCount}</span> matches
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Users className="w-3 h-3" />
-                      {formatCount(scanner.runCount)} runs
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </section>
 
       {/* Marketplace Teaser */}
       <section className="mb-16">

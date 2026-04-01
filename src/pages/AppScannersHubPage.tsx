@@ -22,7 +22,7 @@ export function AppScannersHubPage() {
             </div>
           </div>
         </header>
-      </div>
+            </div>
     </div>
   );
 }

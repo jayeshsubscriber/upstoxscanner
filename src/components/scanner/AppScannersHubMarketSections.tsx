@@ -852,7 +852,11 @@ function LiveSignalCard({ signal }: { signal: LiveMarketSignal }) {
     .filter((metric): metric is { label: string; value: string } => Boolean(metric));
 
   return (
-    <div className="w-[360px] lg:w-full shrink-0 rounded-xl border border-[#F2F0E5] bg-white overflow-hidden flex flex-col snap-start" style={{ boxShadow: "0px 2px 0px #F2F0E5" }}>
+    <div
+      className="shrink-0 snap-start rounded-xl border border-[#F2F0E5] bg-white overflow-hidden flex flex-col w-[min(360px,calc(100vw-2.5rem))] sm:w-[max(220px,min(380px,calc((min(100vw,1536px)-5.5rem)/4)))]"
+      style={{ boxShadow: "0px 2px 0px #F2F0E5" }}
+      role="listitem"
+    >
       {/* HEADER: Stock + Price */}
       <div className="px-3.5 pt-3 pb-2.5">
         <div className="flex items-start justify-between gap-2">
@@ -1244,54 +1248,72 @@ const SCANNER_TOP_SYMBOLS: Record<string, { symbols: string[]; total: number }> 
   "Open = Low (Bullish)":             { symbols: ["LT", "MARUTI", "BAJFINANCE", "ADANIENT"], total: 20 },
 };
 
+/** Fundamentals + technicals: larger subtext on small screens for readability; `sm+` stays compact. */
+const hubScanSubtextClassName =
+  "mt-1 text-sm sm:text-xs text-muted-foreground leading-snug line-clamp-2";
+
+const TECHNICAL_SCAN_RUN_LABELS = [
+  "15 mins ago",
+  "32 mins ago",
+  "1 hr ago",
+  "2 hrs ago",
+  "Yesterday",
+  "EOD",
+] as const;
+
+function technicalScanRunLabel(sectionTitle: string, rowIdx: number): string {
+  const seed = sectionTitle.length * 11 + rowIdx * 7;
+  return TECHNICAL_SCAN_RUN_LABELS[seed % TECHNICAL_SCAN_RUN_LABELS.length];
+}
+
 const TECHNICAL_SCREEN_SECTIONS: Array<{
   title: string;
   Icon: LucideIcon;
-  scans: Array<{ label: string; matchName: string }>;
+  scans: Array<{ label: string; matchName: string; subtext: string }>;
 }> = [
   {
     title: "Moving Average Signals",
     Icon: LineChart,
     scans: [
-      { label: "Golden Crossover", matchName: "Golden Crossover" },
-      { label: "Death Cross Alert", matchName: "Death Cross Alert" },
-      { label: "EMA Bullish Alignment", matchName: "Moving Average Bounce (50 EMA)" },
-      { label: "Moving Average Bounce", matchName: "Moving Average Bounce (50 EMA)" },
-      { label: "Price Reclaimed 200 DMA", matchName: "Golden Crossover" },
+      { label: "Golden Crossover", matchName: "Golden Crossover", subtext: "50/200 MA bull cross — trend bias flips up." },
+      { label: "Death Cross Alert", matchName: "Death Cross Alert", subtext: "50/200 MA bear cross — trend bias weakens." },
+      { label: "EMA Bullish Alignment", matchName: "Moving Average Bounce (50 EMA)", subtext: "Price stacked above short EMAs." },
+      { label: "Moving Average Bounce", matchName: "Moving Average Bounce (50 EMA)", subtext: "Pullback holds at key moving average." },
+      { label: "Price Reclaimed 200 DMA", matchName: "Golden Crossover", subtext: "Close back above the 200-day line." },
     ],
   },
   {
     title: "Breakout Scans",
     Icon: CandlestickChart,
     scans: [
-      { label: "52-Week High Breakout", matchName: "52-Week High Breakout" },
-      { label: "Stocks Near All-Time High", matchName: "Stocks Near All-Time High" },
-      { label: "Consolidation Breakout (BB Squeeze)", matchName: "Consolidation Breakout (BB Squeeze)" },
-      { label: "Darvas Box Breakout", matchName: "Darvas Box Breakout" },
-      { label: "Donchian Channel Breakout", matchName: "Consolidation Breakout (BB Squeeze)" },
-      { label: "NR7 Breakout", matchName: "NR7 Breakout" },
+      { label: "52-Week High Breakout", matchName: "52-Week High Breakout", subtext: "Fresh 52-week high with volume." },
+      { label: "Stocks Near All-Time High", matchName: "Stocks Near All-Time High", subtext: "Trading tight to lifetime highs." },
+      { label: "Consolidation Breakout (BB Squeeze)", matchName: "Consolidation Breakout (BB Squeeze)", subtext: "Squeeze resolves with expansion." },
+      { label: "Darvas Box Breakout", matchName: "Darvas Box Breakout", subtext: "Break above the box ceiling." },
+      { label: "Donchian Channel Breakout", matchName: "Consolidation Breakout (BB Squeeze)", subtext: "Upper Donchian channel break." },
+      { label: "NR7 Breakout", matchName: "NR7 Breakout", subtext: "Narrowest range in 7 sessions breaks." },
     ],
   },
   {
     title: "Mean Reversion Scans",
     Icon: LineChart,
     scans: [
-      { label: "RSI Oversold (Daily < 30)", matchName: "RSI Oversold (Daily < 30)" },
-      { label: "200 DMA Support Zone", matchName: "Moving Average Bounce (50 EMA)" },
-      { label: "Price Below Lower Bollinger Band", matchName: "Consolidation Breakout (BB Squeeze)" },
-      { label: "Bullish Divergence (RSI)", matchName: "Bullish Divergence (RSI)" },
-      { label: "Stochastic Oversold + Turning Up", matchName: "RSI Reversal Hunter" },
+      { label: "RSI Oversold (Daily < 30)", matchName: "RSI Oversold (Daily < 30)", subtext: "Daily RSI deep oversold zone." },
+      { label: "200 DMA Support Zone", matchName: "Moving Average Bounce (50 EMA)", subtext: "Long-term average acting as support." },
+      { label: "Price Below Lower Bollinger Band", matchName: "Consolidation Breakout (BB Squeeze)", subtext: "Close stretched under lower band." },
+      { label: "Bullish Divergence (RSI)", matchName: "Bullish Divergence (RSI)", subtext: "RSI disagrees with lower lows." },
+      { label: "Stochastic Oversold + Turning Up", matchName: "RSI Reversal Hunter", subtext: "Stoch turns up from oversold." },
     ],
   },
   {
     title: "Momentum Scans",
     Icon: Flame,
     scans: [
-      { label: "RSI Entering Overbought", matchName: "RSI Reversal Hunter" },
-      { label: "MACD Bullish Cross", matchName: "VWAP Cross Bullish (5-min)" },
-      { label: "Supertrend Flip (Bullish)", matchName: "Supertrend Flip (Bullish)" },
-      { label: "ADX Trending (Strong)", matchName: "First 15-min Volume Shocker" },
-      { label: "Aroon Bullish", matchName: "Sector Leader Rotation" },
+      { label: "RSI Entering Overbought", matchName: "RSI Reversal Hunter", subtext: "RSI pushing into overbought." },
+      { label: "MACD Bullish Cross", matchName: "VWAP Cross Bullish (5-min)", subtext: "MACD line crosses above signal." },
+      { label: "Supertrend Flip (Bullish)", matchName: "Supertrend Flip (Bullish)", subtext: "Indicator switches to buy mode." },
+      { label: "ADX Trending (Strong)", matchName: "First 15-min Volume Shocker", subtext: "Strong trend strength reading." },
+      { label: "Aroon Bullish", matchName: "Sector Leader Rotation", subtext: "Aroon Up leads — early strength." },
     ],
   },
 ];
@@ -1299,78 +1321,198 @@ const TECHNICAL_SCREEN_SECTIONS: Array<{
 const FUNDAMENTAL_SCREEN_SECTIONS: Array<{
   title: string;
   Icon: LucideIcon;
-  scans: Array<{ label: string; matchName: string }>;
+  scans: Array<{ label: string; matchName: string; subtext: string }>;
 }> = [
   {
     title: "Quality & Compounding",
     Icon: Target,
     scans: [
-      { label: "Coffee Can Portfolio", matchName: "Value + Growth Compounder" },
-      { label: "Consistent Compounders", matchName: "Value + Growth Compounder" },
-      { label: "Bluest of Blue Chips", matchName: "52-Week High Breakout" },
-      { label: "Piotroski Score = 9", matchName: "Piotroski Score > 7" },
-      { label: "Magic Formula", matchName: "Undervalued + Strong Fundamentals" },
+      {
+        label: "Coffee Can Portfolio",
+        matchName: "Value + Growth Compounder",
+        subtext: "Long-hold quality: durable ROE and cash.",
+      },
+      {
+        label: "Consistent Compounders",
+        matchName: "Value + Growth Compounder",
+        subtext: "Earnings compounding year on year.",
+      },
+      {
+        label: "Bluest of Blue Chips",
+        matchName: "52-Week High Breakout",
+        subtext: "Large-cap strength and liquidity.",
+      },
+      {
+        label: "Piotroski Score = 9",
+        matchName: "Piotroski Score > 7",
+        subtext: "Full F-Score fundamentals checklist.",
+      },
+      {
+        label: "Magic Formula",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "High earnings yield plus strong ROIC.",
+      },
     ],
   },
   {
     title: "Emerging Gems",
     Icon: BriefcaseBusiness,
     scans: [
-      { label: "Cash-Rich Small Caps", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "Fast-Growing Micro Caps", matchName: "Value + Growth Compounder" },
-      { label: "Multi-Bagger Candidates", matchName: "Sector Leader Rotation" },
-      { label: "Under-the-Radar Compounders", matchName: "Value + Growth Compounder" },
-      { label: "Small Cap Turnarounds", matchName: "Undervalued + Strong Fundamentals" },
+      {
+        label: "Cash-Rich Small Caps",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Small caps with surplus cash, low debt.",
+      },
+      {
+        label: "Fast-Growing Micro Caps",
+        matchName: "Value + Growth Compounder",
+        subtext: "Fast EPS growth in micro caps.",
+      },
+      {
+        label: "Multi-Bagger Candidates",
+        matchName: "Sector Leader Rotation",
+        subtext: "Improving growth plus momentum.",
+      },
+      {
+        label: "Under-the-Radar Compounders",
+        matchName: "Value + Growth Compounder",
+        subtext: "Quiet earners off the radar.",
+      },
+      {
+        label: "Small Cap Turnarounds",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Profit recovery in small caps.",
+      },
     ],
   },
   {
     title: "Value Screens",
     Icon: Landmark,
     scans: [
-      { label: "Low PE + High Growth", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "PEG Ratio < 1", matchName: "Value + Growth Compounder" },
-      { label: "Graham's Net-Net", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "High ROE Value Picks", matchName: "Piotroski Score > 7" },
-      { label: "Cash-Rich Value Leaders", matchName: "Dividend Aristocrats" },
+      {
+        label: "Low PE + High Growth",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Low multiple with solid EPS growth.",
+      },
+      {
+        label: "PEG Ratio < 1",
+        matchName: "Value + Growth Compounder",
+        subtext: "Cheap versus growth — GARP tilt.",
+      },
+      {
+        label: "Graham's Net-Net",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Below net current assets — deep value.",
+      },
+      {
+        label: "High ROE Value Picks",
+        matchName: "Piotroski Score > 7",
+        subtext: "Strong ROE at fair valuations.",
+      },
+      {
+        label: "Cash-Rich Value Leaders",
+        matchName: "Dividend Aristocrats",
+        subtext: "Yield plus cash-rich balance sheets.",
+      },
     ],
   },
   {
     title: "Dividend Screens",
     Icon: Bell,
     scans: [
-      { label: "Dividend Aristocrats (India)", matchName: "Dividend Aristocrats" },
-      { label: "High Dividend Yield", matchName: "Dividend Aristocrats" },
-      { label: "Dividend + Low Debt", matchName: "Dividend Aristocrats" },
+      {
+        label: "Dividend Aristocrats (India)",
+        matchName: "Dividend Aristocrats",
+        subtext: "Stable or rising payouts, quality filters.",
+      },
+      {
+        label: "High Dividend Yield",
+        matchName: "Dividend Aristocrats",
+        subtext: "Above-market yield, basic safety checks.",
+      },
+      {
+        label: "Dividend + Low Debt",
+        matchName: "Dividend Aristocrats",
+        subtext: "Income with conservative leverage.",
+      },
     ],
   },
   {
     title: "Turnaround & Special Situations",
     Icon: LineChart,
     scans: [
-      { label: "Loss to Profit Turnaround", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "Debt Reduction Champions", matchName: "Value + Growth Compounder" },
-      { label: "Capacity Expansion", matchName: "Sector Leader Rotation" },
+      {
+        label: "Loss to Profit Turnaround",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Back to sustainable profits and cash.",
+      },
+      {
+        label: "Debt Reduction Champions",
+        matchName: "Value + Growth Compounder",
+        subtext: "Active deleveraging, better equity story.",
+      },
+      {
+        label: "Capacity Expansion",
+        matchName: "Sector Leader Rotation",
+        subtext: "Capex that can lift future earnings.",
+      },
     ],
   },
   {
     title: "Shareholding & Ownership",
     Icon: BriefcaseBusiness,
     scans: [
-      { label: "FII Heavy Buying", matchName: "FII/DII Buying Surge" },
-      { label: "Promoter Buying", matchName: "FII/DII Buying Surge" },
-      { label: "Promoter Pledge Reduction", matchName: "Piotroski Score > 7" },
-      { label: "DII Accumulation", matchName: "FII/DII Buying Surge" },
-      { label: "High Promoter Holding + Low Debt", matchName: "Value + Growth Compounder" },
+      {
+        label: "FII Heavy Buying",
+        matchName: "FII/DII Buying Surge",
+        subtext: "Strong recent FII buying flows.",
+      },
+      {
+        label: "Promoter Buying",
+        matchName: "FII/DII Buying Surge",
+        subtext: "Insiders adding — aligned incentives.",
+      },
+      {
+        label: "Promoter Pledge Reduction",
+        matchName: "Piotroski Score > 7",
+        subtext: "Lower pledge, cleaner risk profile.",
+      },
+      {
+        label: "DII Accumulation",
+        matchName: "FII/DII Buying Surge",
+        subtext: "Domestic institutions building size.",
+      },
+      {
+        label: "High Promoter Holding + Low Debt",
+        matchName: "Value + Growth Compounder",
+        subtext: "High skin in the game, low leverage.",
+      },
     ],
   },
   {
     title: "Thematic",
     Icon: BriefcaseBusiness,
     scans: [
-      { label: "Profitable Small Caps", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "PSU Gems", matchName: "Dividend Aristocrats" },
-      { label: "Defence & Railways", matchName: "Sector Leader Rotation" },
-      { label: "Green Energy / EV Plays", matchName: "Sector Leader Rotation" },
+      {
+        label: "Profitable Small Caps",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Earnings-positive small caps.",
+      },
+      {
+        label: "PSU Gems",
+        matchName: "Dividend Aristocrats",
+        subtext: "PSU yield, reform, quality angles.",
+      },
+      {
+        label: "Defence & Railways",
+        matchName: "Sector Leader Rotation",
+        subtext: "Defence and rail capex themes.",
+      },
+      {
+        label: "Green Energy / EV Plays",
+        matchName: "Sector Leader Rotation",
+        subtext: "Renewables, EV chain, clean energy.",
+      },
     ],
   },
 ];
@@ -1484,7 +1626,10 @@ export function AppScannersHubMarketSections() {
                 No signals match these filters. Try a different signal type or time horizon.
               </p>
             ) : (
-              <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-0 snap-x snap-mandatory scrollbar-none lg:mr-0 lg:pr-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:snap-none">
+              <div
+                className="flex flex-nowrap gap-3 overflow-x-auto overscroll-x-contain pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none sm:pr-6 lg:mr-0 lg:pr-0 touch-pan-x"
+                role="list"
+              >
                 {liveSignalsFiltered.map((signal) => (
                   <LiveSignalCard key={signal.id} signal={signal} />
                 ))}
@@ -1496,17 +1641,24 @@ export function AppScannersHubMarketSections() {
         <section className="mb-6 lg:mb-8" aria-label="Fundamental screens">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xl leading-7 font-bold text-foreground">Fundamental Screens</h2>
-            <Link to="/scanners" className="text-xs font-medium text-primary">
+            <Link
+              to="/scanners"
+              className="text-xs font-medium text-foreground underline-offset-4 hover:underline"
+            >
               View all
             </Link>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none lg:mr-0 lg:pr-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:snap-none">
+          <div
+            className="flex flex-nowrap gap-3 overflow-x-auto overscroll-x-contain pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none sm:pr-6 lg:mr-0 lg:pr-0 touch-pan-x"
+            role="list"
+          >
             {fundamentalScreenSections.map((section) => (
               <div
                 key={section.title}
-                className="w-[90%] min-w-[320px] max-w-[360px] lg:w-full lg:min-w-0 lg:max-w-none shrink-0 snap-start rounded-2xl border border-border/60 bg-white overflow-hidden"
+                className="shrink-0 snap-start rounded-2xl border border-neutral-200/90 bg-white overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)] w-[min(360px,calc(100vw-2.5rem))] sm:w-[max(220px,min(380px,calc((min(100vw,1536px)-5.5rem)/4)))]"
+                role="listitem"
               >
-                <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
+                <div className="px-4 py-3 border-b border-border/70 flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
                     <section.Icon className="w-5 h-5 text-foreground shrink-0" />
                     <h3 className="text-[15px] leading-5 font-semibold text-foreground truncate">{section.title}</h3>
@@ -1518,12 +1670,24 @@ export function AppScannersHubMarketSections() {
                       key={`${section.title}-${item.label}`}
                       to={`/scanners/${item.scanner.id}`}
                       className={cn(
-                        "flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/30 transition-colors",
-                        idx !== section.scans.length - 1 && "border-b border-border/50"
+                        "block px-4 py-3.5 sm:py-4 hover:bg-muted/30 transition-colors",
+                        idx !== section.scans.length - 1 && "border-b border-border/60"
                       )}
                     >
-                      <span className="text-[14px] leading-5 font-medium text-foreground">{item.label}</span>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground/70 shrink-0" />
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-[14px] leading-5 font-semibold text-foreground pr-1">
+                            {item.label}
+                          </h4>
+                          <p className={hubScanSubtextClassName}>{item.subtext}</p>
+                          <div className="mt-2 flex items-center">
+                            <span className="text-xs sm:text-[11px] font-medium text-muted-foreground tabular-nums">
+                              {item.scanner.resultCount} stocks
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground/70 shrink-0 mt-0.5" aria-hidden />
+                      </div>
                     </Link>
                   ))}
                 </div>
@@ -1535,18 +1699,25 @@ export function AppScannersHubMarketSections() {
         <section className="mb-6 lg:mb-8" aria-label="Technical screens">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xl leading-7 font-bold text-foreground">Technical Screens</h2>
-            <Link to="/scanners" className="text-xs font-medium text-primary">
+            <Link
+              to="/scanners"
+              className="text-xs font-medium text-foreground underline-offset-4 hover:underline"
+            >
               View all
             </Link>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none lg:mr-0 lg:pr-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:snap-none">
+          <div
+            className="flex flex-nowrap gap-3 overflow-x-auto overscroll-x-contain pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none sm:pr-6 lg:mr-0 lg:pr-0 touch-pan-x"
+            role="list"
+          >
             {technicalScreenSections.map((section) => (
                 <div
                   key={section.title}
-                  className="w-[90%] min-w-[320px] max-w-[360px] lg:w-full lg:min-w-0 lg:max-w-none shrink-0 snap-start rounded-2xl border border-border/60 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden"
+                  className="shrink-0 snap-start rounded-2xl border border-neutral-200/90 bg-white overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)] w-[min(360px,calc(100vw-2.5rem))] sm:w-[max(220px,min(380px,calc((min(100vw,1536px)-5.5rem)/4)))]"
+                  role="listitem"
                 >
                   {/* Section header */}
-                  <div className="flex items-center px-4 py-3.5 border-b border-border/50">
+                  <div className="flex items-center px-4 py-3.5 border-b border-border/70">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <section.Icon className="w-5 h-5 text-foreground shrink-0" />
                       <h3 className="text-[15px] leading-5 font-semibold text-foreground truncate">
@@ -1560,35 +1731,37 @@ export function AppScannersHubMarketSections() {
                     {section.scans.map((item, rowIdx) => {
                       const isLast = rowIdx === section.scans.length - 1;
                       const stockData = SCANNER_TOP_SYMBOLS[item.scanner.name];
+                      const runLabel = technicalScanRunLabel(section.title, rowIdx);
                       return (
                         <Link
                           key={`${section.title}-${item.label}-${item.scanner.id}`}
                           to={`/scanners/${item.scanner.id}`}
                           className={cn(
                             "block px-4 py-4 hover:bg-muted/30 transition-colors",
-                            !isLast && "border-b border-border/50"
+                            !isLast && "border-b border-border/60"
                           )}
                         >
-                          <div className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1">
-                              <h4 className="text-[14px] leading-5 font-semibold text-foreground truncate pr-1">
+                          <div className="relative">
+                            <div className="min-w-0">
+                              <h4 className="text-[14px] leading-5 font-semibold text-foreground truncate pr-5">
                                 {item.label}
                               </h4>
+                              <p className={hubScanSubtextClassName}>{item.subtext}</p>
 
                               {/* Stock logos + last updated */}
-                              <div className="flex items-center justify-between mt-2.5">
+                              <div className="mt-2 grid grid-cols-[1fr_auto] items-center gap-2">
                                 {stockData ? (
                                   <StockLogoRow symbols={stockData.symbols} total={stockData.total} />
                                 ) : (
                                   <span />
                                 )}
-                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground/70 shrink-0">
-                                  <Clock className="h-2.5 w-2.5" />
-                                  {item.scanner.lastUpdated}
+                                <span className="inline-flex h-4 min-w-[74px] items-center justify-end gap-1 text-[10px] leading-none text-muted-foreground/70 whitespace-nowrap justify-self-end text-right">
+                                  <Clock className="h-2.5 w-2.5 shrink-0" />
+                                  {runLabel}
                                 </span>
                               </div>
                             </div>
-                            <ChevronRight className="w-4 h-4 text-muted-foreground/70 shrink-0 mt-0.5" />
+                            <ChevronRight className="w-4 h-4 text-muted-foreground/70 absolute right-0 top-0.5" />
                           </div>
                         </Link>
                       );
