@@ -80,6 +80,7 @@ export interface ScanResultRow {
   close: number;
   change1d: number;
   volume: number;
+  marketCap?: number;
   matchedGroups: number;
   indicatorValues: Record<string, number>;
 }

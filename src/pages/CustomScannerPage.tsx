@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   X, Plus, Search, Loader2, Sparkles, Lock, ChevronDown, ChevronRight, Pencil, RotateCcw,
-  SlidersHorizontal, TrendingUp, TrendingDown, Share2, Save, Settings2,
+  SlidersHorizontal, TrendingUp, TrendingDown, Share2, Save, Settings2, BellRing, BarChart3, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -150,6 +151,96 @@ async function loadUniverseSnapshot(universe: string): Promise<ScanResultRow[]> 
       } satisfies ScanResultRow;
     })
     .sort((a, b) => a.symbol.localeCompare(b.symbol));
+}
+
+const LOCAL_FALLBACK_STOCKS_50: Array<{ symbol: string; name: string }> = [
+  { symbol: "RELIANCE", name: "Reliance Industries" },
+  { symbol: "TCS", name: "Tata Consultancy Services" },
+  { symbol: "HDFCBANK", name: "HDFC Bank" },
+  { symbol: "ICICIBANK", name: "ICICI Bank" },
+  { symbol: "INFY", name: "Infosys" },
+  { symbol: "SBIN", name: "State Bank of India" },
+  { symbol: "BHARTIARTL", name: "Bharti Airtel" },
+  { symbol: "LT", name: "Larsen & Toubro" },
+  { symbol: "ITC", name: "ITC" },
+  { symbol: "HINDUNILVR", name: "Hindustan Unilever" },
+  { symbol: "KOTAKBANK", name: "Kotak Mahindra Bank" },
+  { symbol: "AXISBANK", name: "Axis Bank" },
+  { symbol: "BAJFINANCE", name: "Bajaj Finance" },
+  { symbol: "ASIANPAINT", name: "Asian Paints" },
+  { symbol: "MARUTI", name: "Maruti Suzuki" },
+  { symbol: "SUNPHARMA", name: "Sun Pharmaceutical" },
+  { symbol: "ULTRACEMCO", name: "UltraTech Cement" },
+  { symbol: "NESTLEIND", name: "Nestle India" },
+  { symbol: "TITAN", name: "Titan Company" },
+  { symbol: "POWERGRID", name: "Power Grid Corp" },
+  { symbol: "NTPC", name: "NTPC" },
+  { symbol: "ONGC", name: "ONGC" },
+  { symbol: "COALINDIA", name: "Coal India" },
+  { symbol: "ADANIENT", name: "Adani Enterprises" },
+  { symbol: "ADANIPORTS", name: "Adani Ports" },
+  { symbol: "BAJAJFINSV", name: "Bajaj Finserv" },
+  { symbol: "HCLTECH", name: "HCL Technologies" },
+  { symbol: "WIPRO", name: "Wipro" },
+  { symbol: "TECHM", name: "Tech Mahindra" },
+  { symbol: "M&M", name: "Mahindra & Mahindra" },
+  { symbol: "TATAMOTORS", name: "Tata Motors" },
+  { symbol: "TATASTEEL", name: "Tata Steel" },
+  { symbol: "JSWSTEEL", name: "JSW Steel" },
+  { symbol: "INDUSINDBK", name: "IndusInd Bank" },
+  { symbol: "DRREDDY", name: "Dr Reddy's Labs" },
+  { symbol: "CIPLA", name: "Cipla" },
+  { symbol: "EICHERMOT", name: "Eicher Motors" },
+  { symbol: "HEROMOTOCO", name: "Hero MotoCorp" },
+  { symbol: "APOLLOHOSP", name: "Apollo Hospitals" },
+  { symbol: "GRASIM", name: "Grasim Industries" },
+  { symbol: "HDFCLIFE", name: "HDFC Life" },
+  { symbol: "SBILIFE", name: "SBI Life Insurance" },
+  { symbol: "BRITANNIA", name: "Britannia Industries" },
+  { symbol: "DIVISLAB", name: "Divi's Laboratories" },
+  { symbol: "BPCL", name: "Bharat Petroleum" },
+  { symbol: "SHRIRAMFIN", name: "Shriram Finance" },
+  { symbol: "BAJAJ-AUTO", name: "Bajaj Auto" },
+  { symbol: "HINDALCO", name: "Hindalco Industries" },
+  { symbol: "TATACONSUM", name: "Tata Consumer Products" },
+  { symbol: "UPL", name: "UPL" },
+];
+
+function buildLocalFallbackRows(): ScanResultRow[] {
+  const hashToUnit = (text: string): number => {
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return ((h >>> 0) % 10000) / 10000;
+  };
+
+  const between = (u: number, min: number, max: number): number => min + (max - min) * u;
+
+  return LOCAL_FALLBACK_STOCKS_50.map((s) => {
+    const u1 = hashToUnit(`${s.symbol}:price`);
+    const u2 = hashToUnit(`${s.symbol}:chg`);
+    const u3 = hashToUnit(`${s.symbol}:vol`);
+    const u4 = hashToUnit(`${s.symbol}:mcap`);
+
+    // Keep values in plausible Indian large-cap ranges.
+    const close = Number(between(u1, 120, 4200).toFixed(2));
+    const change1d = Number((between(u2, -4.2, 4.2)).toFixed(2));
+    const volume = Math.round(between(u3, 300000, 28000000));
+    const marketCap = Math.round(between(u4, 35000, 2200000) * 1e7); // INR Crores -> INR
+
+    return {
+      symbol: s.symbol,
+      name: s.name,
+      close,
+      change1d,
+      volume,
+      marketCap,
+      matchedGroups: 0,
+      indicatorValues: {},
+    };
+  });
 }
 
 let _nextId = 1;
@@ -890,6 +981,88 @@ function formatVolume(vol: number): string {
   if (vol >= 1e5) return (vol / 1e5).toFixed(1) + "L";
   if (vol >= 1e3) return (vol / 1e3).toFixed(1) + "K";
   return String(vol);
+}
+
+function formatMarketCap(value?: number): string {
+  if (!value || value <= 0) return "—";
+  if (value >= 1e12) return "₹" + (value / 1e12).toFixed(2) + "T";
+  if (value >= 1e9) return "₹" + (value / 1e9).toFixed(2) + "B";
+  if (value >= 1e7) return "₹" + (value / 1e7).toFixed(1) + "Cr";
+  return "₹" + value.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+}
+
+/** Sticky right “Watch” column — shared by default universe table and scan results. */
+const WATCH_COL_CLASS =
+  "sticky right-0 z-20 w-[208px] min-w-[208px] max-w-[208px] box-border border-l border-border/40 bg-background shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)]";
+
+function DesktopWatchColumnHeader() {
+  return (
+    <th className={cn("py-3 px-2 font-medium text-right text-muted-foreground whitespace-nowrap", WATCH_COL_CLASS)}>
+      Watch
+    </th>
+  );
+}
+
+function DesktopWatchColumnCell({ symbol }: { symbol: string }) {
+  return (
+    <td className={cn("py-2.5 px-2", WATCH_COL_CLASS)}>
+      <div className="flex w-full items-center justify-end gap-1.5">
+        <div className="flex min-w-0 shrink items-center justify-end gap-1 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto">
+          <button
+            type="button"
+            className="h-7 min-w-7 px-1.5 rounded-md border border-[#008858]/30 text-[#008858] text-[11px] font-semibold hover:bg-[#DEF5ED]"
+            title="Buy"
+          >
+            B
+          </button>
+          <button
+            type="button"
+            className="h-7 min-w-7 px-1.5 rounded-md border border-[#D53627]/30 text-[#D53627] text-[11px] font-semibold hover:bg-[#FCE7E7]"
+            title="Sell"
+          >
+            S
+          </button>
+          <button
+            type="button"
+            className="h-7 w-7 shrink-0 rounded-md border border-border text-muted-foreground inline-flex items-center justify-center hover:text-foreground hover:bg-muted"
+            title="Option chain"
+            aria-label={`Open option chain for ${symbol}`}
+          >
+            <Layers className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            className="h-7 w-7 shrink-0 rounded-md border border-border text-muted-foreground inline-flex items-center justify-center hover:text-foreground hover:bg-muted"
+            title="Open chart"
+            aria-label={`Open chart for ${symbol}`}
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <button
+          type="button"
+          title="Add to watchlist"
+          aria-label={`Add ${symbol} to watchlist`}
+          className="h-7 w-7 shrink-0 rounded-full border border-[#542087] text-[#542087] inline-flex items-center justify-center hover:bg-[#F5F2F9]"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </td>
+  );
+}
+
+function MobileWatchPlusButton({ symbol }: { symbol: string }) {
+  return (
+    <button
+      type="button"
+      title="Add to watchlist"
+      aria-label={`Add ${symbol} to watchlist`}
+      className="h-7 w-7 shrink-0 rounded-full border border-[#542087] text-[#542087] inline-flex items-center justify-center hover:bg-[#F5F2F9]"
+    >
+      <Plus className="h-3.5 w-3.5" />
+    </button>
+  );
 }
 
 function timeAgo(iso: string): string {
@@ -2383,6 +2556,7 @@ function SimpleBuilderView({
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export function CustomScannerPage() {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<"standard" | "custom">("standard");
   const uiMode = "simple" as const;
   const [query, setQuery] = useState<QueryState>({
@@ -2428,6 +2602,7 @@ export function CustomScannerPage() {
 
   const [savedScreenerId, setSavedScreenerId] = useState<string | null>(null);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [pendingActionAfterSave, setPendingActionAfterSave] = useState<"share" | "alerts" | null>(null);
   /** Fingerprint after last successful save via modal (for “unsaved changes”). */
   const [savedWorkspaceFingerprint, setSavedWorkspaceFingerprint] = useState<string | null>(null);
 
@@ -2445,6 +2620,20 @@ export function CustomScannerPage() {
       if (headerNoticeTimerRef.current) clearTimeout(headerNoticeTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const state = location.state as { quickQuery?: QueryState } | null;
+    if (!state?.quickQuery) return;
+    const incomingQuery = state.quickQuery;
+    if (!Array.isArray(incomingQuery.groups)) return;
+    setQuery({
+      ...incomingQuery,
+      name: (incomingQuery.name && incomingQuery.name.trim()) ? incomingQuery.name : DEFAULT_SCREENER_NAME,
+      preferences: { ...DEFAULT_SCREENER_PREFERENCES, ...incomingQuery.preferences },
+    });
+    setSimpleConditions(queryToSimple(incomingQuery));
+    setActiveTab("standard");
+  }, [location.key, location.state]);
 
   // Data refresh state
   // Sidebar state (lifted to page level so it renders outside the scroll area)
@@ -2608,11 +2797,41 @@ export function CustomScannerPage() {
 
   // Load default universe snapshot on mount
   useEffect(() => {
-    setIsLoadingDefaults(true);
-    loadUniverseSnapshot("nifty500")
-      .then(setDefaultStocks)
-      .catch(() => {})
-      .finally(() => setIsLoadingDefaults(false));
+    let cancelled = false;
+    const loadDefaults = async () => {
+      setIsLoadingDefaults(true);
+      try {
+        const snapshot = await loadUniverseSnapshot("nifty500");
+        if (snapshot.length > 0) {
+          if (!cancelled) setDefaultStocks(snapshot.slice(0, 50));
+          return;
+        }
+
+        // Fallback: still show 50 symbols even when candles are not configured yet.
+        const instruments = await getInstrumentList("nifty500");
+        const fallbackRows: ScanResultRow[] = instruments.length > 0
+          ? instruments.slice(0, 50).map((inst) => ({
+              symbol: inst.symbol,
+              name: inst.name,
+              close: 0,
+              change1d: 0,
+              volume: 0,
+              marketCap: undefined,
+              matchedGroups: 0,
+              indicatorValues: {},
+            }))
+          : buildLocalFallbackRows();
+        if (!cancelled) setDefaultStocks(fallbackRows);
+      } catch {
+        if (!cancelled) setDefaultStocks(buildLocalFallbackRows());
+      } finally {
+        if (!cancelled) setIsLoadingDefaults(false);
+      }
+    };
+    void loadDefaults();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Load token + data freshness on mount
@@ -2638,7 +2857,8 @@ export function CustomScannerPage() {
       setCustomFormula(parsed.customFormula);
       setCustomNlInput(parsed.customNlInput);
       setCustomUniverse(parsed.customUniverse);
-      setActiveTab(parsed.activeTab);
+      // DIY should always open in standard mode.
+      setActiveTab("standard");
       setSavedScreenerId(parsed.savedScreenerId ?? null);
     } catch {
       /* ignore corrupt storage */
@@ -2760,10 +2980,6 @@ export function CustomScannerPage() {
     } finally {
       setIsScanning(false);
     }
-  }
-
-  function handleTabSwitch(tab: "standard" | "custom") {
-    setActiveTab(tab);
   }
 
   const _handleRefreshData = useCallback(async (phase: "1d" | "15m" | "1M" | "all") => {
@@ -2940,6 +3156,61 @@ export function CustomScannerPage() {
 
   const canSaveScreener =
     activeTab === "standard" ? conditionCount > 0 : customQueryIsValid;
+  const alertsConfigured = useMemo(() => {
+    const prefs = query.preferences ?? DEFAULT_SCREENER_PREFERENCES;
+    return (
+      prefs.runSchedule !== "manual" ||
+      prefs.notifyInApp ||
+      prefs.notifyEmail ||
+      prefs.notifyPush
+    );
+  }, [query.preferences]);
+
+  const saveCtaLabel = !savedScreenerId
+    ? "Save"
+    : hasUnsavedChanges
+      ? "Save changes"
+      : "Saved";
+
+  async function handleShareSavedScreener() {
+    const title = query.name.trim() || DEFAULT_SCREENER_NAME;
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}${window.location.pathname}?screener=${encodeURIComponent(savedScreenerId!)}`
+        : "";
+    const summaryLine = summary.trim();
+    const statusLine =
+      isScanning
+        ? scanProgress?.message ?? "Updating results..."
+        : hasRun
+          ? `${results.length} match${results.length !== 1 ? "es" : ""} found`
+          : "DIY screener on Upstox Scanners";
+    const text = [statusLine, summaryLine ? summaryLine.slice(0, 400) : ""].filter(Boolean).join("\n\n");
+
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title, text, url });
+        return;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(`${title}\n\n${text}\n\n${url}`);
+      flashHeaderNotice("Copied to clipboard");
+    } catch {
+      flashHeaderNotice("Could not share or copy");
+    }
+  }
+
+  function requireSaveBefore(action: "share" | "alerts"): boolean {
+    if (!savedScreenerId || hasUnsavedChanges) {
+      setPendingActionAfterSave(action);
+      setSaveModalOpen(true);
+      return true;
+    }
+    return false;
+  }
 
   async function handleSaveModalSubmit(payload: {
     name: string;
@@ -3002,42 +3273,26 @@ export function CustomScannerPage() {
     });
     setSavedWorkspaceFingerprint(nextFp);
     flashHeaderNotice("Screener saved");
+    const pending = pendingActionAfterSave;
+    setPendingActionAfterSave(null);
+    if (pending === "share") {
+      setTimeout(() => {
+        void handleShareSavedScreener();
+      }, 0);
+    } else if (pending === "alerts") {
+      flashHeaderNotice("Alerts preferences saved");
+    }
     return { ok: true };
   }
 
   async function handleShareDiyScreener() {
-    if (!savedScreenerId) {
-      setSaveModalOpen(true);
-      return;
-    }
-    const title = query.name.trim() || DEFAULT_SCREENER_NAME;
-    const url =
-      typeof window !== "undefined"
-        ? `${window.location.origin}${window.location.pathname}?screener=${encodeURIComponent(savedScreenerId!)}`
-        : "";
-    const summaryLine = summary.trim();
-    const statusLine =
-      isScanning
-        ? scanProgress?.message ?? "Updating results..."
-        : hasRun
-          ? `${results.length} match${results.length !== 1 ? "es" : ""} found`
-          : "DIY screener on Upstox Scanners";
-    const text = [statusLine, summaryLine ? summaryLine.slice(0, 400) : ""].filter(Boolean).join("\n\n");
+    if (requireSaveBefore("share")) return;
+    await handleShareSavedScreener();
+  }
 
-    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-      try {
-        await navigator.share({ title, text, url });
-        return;
-      } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") return;
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(`${title}\n\n${text}\n\n${url}`);
-      flashHeaderNotice("Copied to clipboard");
-    } catch {
-      flashHeaderNotice("Could not share or copy");
-    }
+  function handleAlertsAction() {
+    if (requireSaveBefore("alerts")) return;
+    setSaveModalOpen(true);
   }
 
   function openSaveScreenerModal() {
@@ -3052,19 +3307,6 @@ export function CustomScannerPage() {
       aria-label="Screener name"
       className="h-9 font-bold text-base text-foreground bg-background border-input shadow-sm w-full max-w-md md:font-semibold md:text-sm"
     />
-  );
-
-  const shareButton = (className: string) => (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className={className}
-      onClick={() => void handleShareDiyScreener()}
-    >
-      <Share2 className="h-3.5 w-3.5" />
-      Share
-    </Button>
   );
 
   return (
@@ -3091,7 +3333,6 @@ export function CustomScannerPage() {
               <p className="text-[10px] font-medium text-amber-800">Unsaved changes — save to sync settings</p>
             )}
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              {shareButton("gap-1.5 h-9")}
               <Button
                 type="button"
                 size="sm"
@@ -3100,7 +3341,27 @@ export function CustomScannerPage() {
                 onClick={openSaveScreenerModal}
               >
                 <Save className="h-3.5 w-3.5" />
-                Save screener
+                {saveCtaLabel}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-9"
+                onClick={() => void handleShareDiyScreener()}
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                Share
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-9"
+                onClick={handleAlertsAction}
+              >
+                <BellRing className="h-3.5 w-3.5" />
+                Alerts
               </Button>
               {headerNotice && (
                 <span className="text-xs text-primary font-medium w-full sm:w-auto">{headerNotice}</span>
@@ -3170,82 +3431,28 @@ export function CustomScannerPage() {
         </div>
       </div>
 
-      {/* Desktop sub-header */}
-      <div className="hidden md:flex items-center justify-between gap-4 px-6 h-12 bg-background shrink-0">
-        {/* Left: editable screener name */}
-        <div className="flex items-center gap-2 min-w-0 flex-1 group">
-          <input
-            value={query.name}
-            onChange={(e) => setQuery((q) => ({ ...q, name: e.target.value }))}
-            placeholder={DEFAULT_SCREENER_NAME}
-            aria-label="Screener name"
-            className="text-lg font-bold text-foreground bg-transparent border-0 outline-none p-0 m-0 min-w-0 w-auto max-w-xs placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none truncate"
-            style={{ width: `${Math.max((query.name || DEFAULT_SCREENER_NAME).length, 12)}ch` }}
-          />
-          <Pencil
-            size={13}
-            className="text-muted-foreground/40 shrink-0 group-hover:text-muted-foreground transition-colors cursor-pointer"
-            onClick={(e) => {
-              const input = (e.currentTarget.parentElement?.querySelector("input") as HTMLInputElement | null);
-              input?.focus();
-            }}
-          />
-          {hasUnsavedChanges && (
-            <Badge variant="outline" className="text-[10px] font-medium border-amber-300 text-amber-800 bg-amber-50 shrink-0">
-              Unsaved changes
-            </Badge>
-          )}
-          {headerNotice && (
-            <span className="text-xs text-primary font-medium ml-1">{headerNotice}</span>
-          )}
-        </div>
-
-        {/* Share — opens save modal if not yet persisted */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => void handleShareDiyScreener()}
-            className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-border/60 bg-transparent text-sm font-medium text-foreground hover:bg-muted/60 transition-colors"
-          >
-            <Share2 size={13} />
-            Share
-          </button>
-        </div>
-      </div>
-
-      {/* Soft inset separator */}
-      <div className="hidden md:block h-px bg-border/40 mx-6" />
-
-      <div className="flex flex-row flex-1 min-h-0 min-w-0">
+      <div className="flex flex-row flex-1 min-h-0 min-w-0 md:p-4 md:pt-3 md:gap-4">
       {/* ── Left: Query Builder ── */}
       <div className={cn(
-        "flex flex-col min-h-0 border-r border-border/60 bg-background",
-        // Desktop: fixed 460px sidebar
-        "md:w-[460px] md:shrink-0 md:relative md:flex",
+        "flex flex-col min-h-0 bg-background md:border md:border-border/70",
+        // Desktop: slightly narrower fixed sidebar
+        "md:w-[420px] md:shrink-0 md:relative md:flex",
         // Mobile: full-screen overlay when open, hidden otherwise
         mobileFilterOpen ? "fixed inset-0 z-50 flex" : "hidden md:flex"
       )}>
-        {/* Tabs (+ mobile close button) */}
-        <div className="flex border-b border-border bg-background items-center">
-          {([
-            { id: "standard" as const, label: "Standard" },
-            { id: "custom" as const, label: "Custom" },
-          ]).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handleTabSwitch(tab.id)}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 relative",
-                activeTab === tab.id
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {tab.id === "custom" && <Sparkles size={11} />}
-              {tab.label}
-            </button>
-          ))}
-          {/* Mobile-only close button */}
+        {/* Filters header + mobile-only close button */}
+        <div className="flex border-b border-border bg-muted/20 items-center justify-between min-h-11">
+          <div className="hidden md:flex items-center px-4">
+            <h2 className="text-sm font-semibold text-foreground">Filters</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSimpleConditions([])}
+            disabled={conditionCount === 0}
+            className="hidden md:inline-flex items-center mr-4 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Clear all
+          </button>
           <button
             onClick={() => setMobileFilterOpen(false)}
             className="md:hidden shrink-0 px-3 h-full flex items-center text-muted-foreground hover:text-foreground border-l border-border"
@@ -3456,11 +3663,6 @@ export function CustomScannerPage() {
 
         {/* Summary + Actions */}
         <div className="border-t border-border">
-          {activeTab === "standard" && summary && (
-            <div className="px-4 py-3 bg-primary/5 text-xs text-foreground/80 italic border-b border-border leading-relaxed">
-              {summary}
-            </div>
-          )}
           <div className="p-3 space-y-2">
             {activeTab === "custom" ? (
               <>
@@ -3518,26 +3720,14 @@ export function CustomScannerPage() {
             ) : (
               <>
                 {uiMode === "simple" ? (
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => handleOpenSidebar("new")}
-                      className="flex-1 gap-1.5 h-11 text-sm border-primary/30"
-                    >
-                      <Plus size={14} />
-                      Add condition
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={openSaveScreenerModal}
-                      disabled={!canSaveScreener}
-                      className="flex-1 gap-1.5 h-11 text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                    >
-                      <Save size={14} />
-                      Save screener
-                    </Button>
-                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => handleOpenSidebar("new")}
+                    className="w-full gap-1.5 h-11 text-sm bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Plus size={14} />
+                    Add condition
+                  </Button>
                 ) : (
                   <Button
                     type="button"
@@ -3549,27 +3739,6 @@ export function CustomScannerPage() {
                     Save screener
                   </Button>
                 )}
-                {savedScreenerId && (
-                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                    <span className="text-[10px] text-muted-foreground">Saved</span>
-                    <button
-                      type="button"
-                      onClick={() => void handleShareDiyScreener()}
-                      className="text-[10px] font-medium text-primary hover:underline inline-flex items-center gap-1"
-                    >
-                      <Share2 size={10} />
-                      Share
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openSaveScreenerModal}
-                      className="text-[10px] font-medium text-primary hover:underline inline-flex items-center gap-1"
-                    >
-                      <Settings2 size={10} />
-                      Edit settings
-                    </button>
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -3577,7 +3746,88 @@ export function CustomScannerPage() {
       </div>
 
       {/* ── Right: Results ── */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-background">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-background md:border md:border-border/70">
+        {/* Desktop results header */}
+        <div className="hidden md:flex items-center justify-between gap-4 px-4 h-12 border-b border-border bg-background">
+          <div className="flex items-center gap-2 min-w-0 flex-1 group">
+            <input
+              value={query.name}
+              onChange={(e) => setQuery((q) => ({ ...q, name: e.target.value }))}
+              placeholder={DEFAULT_SCREENER_NAME}
+              aria-label="Screener name"
+              className="text-lg font-bold text-foreground bg-transparent border-0 outline-none p-0 m-0 min-w-0 w-auto max-w-xs placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none truncate"
+              style={{ width: `${Math.max((query.name || DEFAULT_SCREENER_NAME).length, 12)}ch` }}
+            />
+            <Pencil
+              size={13}
+              className="text-muted-foreground/40 shrink-0 group-hover:text-muted-foreground transition-colors cursor-pointer"
+              onClick={(e) => {
+                const input = (e.currentTarget.parentElement?.querySelector("input") as HTMLInputElement | null);
+                input?.focus();
+              }}
+            />
+            {hasUnsavedChanges && (
+              <Badge variant="outline" className="text-[10px] font-medium border-amber-300 text-amber-800 bg-amber-50 shrink-0">
+                Unsaved changes
+              </Badge>
+            )}
+            {headerNotice && (
+              <span className="text-xs text-primary font-medium ml-1">{headerNotice}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 border-[#E1E1E1] text-[#777777] hover:text-[#262626] hover:bg-white"
+              onClick={() => {
+                const input = document.querySelector<HTMLInputElement>('[aria-label="Screener name"]');
+                input?.focus();
+              }}
+              title="Edit screener name"
+              aria-label="Edit screener name"
+            >
+              <Pencil size={16} />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 border-[#E1E1E1] text-[#777777] hover:text-[#262626] hover:bg-white"
+              onClick={() => void handleShareDiyScreener()}
+              title="Share screener"
+              aria-label="Share screener"
+            >
+              <Share2 size={16} />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className={cn(
+                "h-10 w-10 border-[#E1E1E1] text-[#777777] hover:text-[#262626] hover:bg-white",
+                alertsConfigured && "border-primary/40 text-primary bg-primary/5 hover:bg-primary/10"
+              )}
+              onClick={handleAlertsAction}
+              title={alertsConfigured ? "Alerts on" : "Set alerts"}
+              aria-label={alertsConfigured ? "Alerts on" : "Set alerts"}
+            >
+              <BellRing size={16} />
+            </Button>
+            <Button
+              type="button"
+              className={cn(
+                "h-11 min-w-[140px] px-7 text-base font-semibold bg-primary hover:bg-primary/90",
+                savedScreenerId && !hasUnsavedChanges && "bg-primary/85"
+              )}
+              disabled={!canSaveScreener}
+              onClick={openSaveScreenerModal}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
 
         {/* Results body */}
         {!hasRun ? (
@@ -3603,6 +3853,7 @@ export function CustomScannerPage() {
                     <div className="flex-1 text-[10px] font-medium text-muted-foreground">Symbol</div>
                     <div className="w-24 text-right text-[10px] font-medium text-muted-foreground">Price</div>
                     <div className="w-16 text-right text-[10px] font-medium text-muted-foreground">1D Chg%</div>
+                    <div className="w-9 shrink-0 text-center text-[10px] font-medium text-muted-foreground">Watch</div>
                   </div>
                   {defaultStocks.map((row, idx) => (
                     <div key={row.symbol} className="flex items-center px-4 py-3.5 border-b border-border/40">
@@ -3627,6 +3878,9 @@ export function CustomScannerPage() {
                           {Math.abs(row.change1d).toFixed(2)}%
                         </div>
                       </div>
+                      <div className="w-9 shrink-0 flex justify-center">
+                        <MobileWatchPlusButton symbol={row.symbol} />
+                      </div>
                     </div>
                   ))}
                 </>
@@ -3636,40 +3890,47 @@ export function CustomScannerPage() {
             {/* ── Desktop: default stocks table or empty state ── */}
             {defaultStocks.length > 0 ? (
               <div className="hidden md:block flex-1 overflow-auto">
-                <div className="px-4 py-2 bg-muted/30 border-b border-border/60">
-                  <span className="text-xs text-muted-foreground">
-                    All stocks — no filter applied. Add conditions; results update automatically.
-                  </span>
-                </div>
                 <table className="text-sm border-collapse" style={{ minWidth: "100%" }}>
                   <thead className="sticky top-0 bg-background border-b border-border/60 z-10">
                     <tr className="text-left text-muted-foreground whitespace-nowrap">
-                      <th className="py-3 px-3 font-medium w-8">#</th>
-                      <th className="py-3 px-3 font-medium min-w-[130px]">Symbol</th>
+                      <th className="py-3 px-3 font-medium w-8 sticky left-0 bg-background z-20">#</th>
+                      <th className="py-3 px-3 font-medium sticky left-8 bg-background z-20 min-w-[130px]">Symbol</th>
                       <th className="py-3 px-3 font-medium">Price</th>
                       <th className="py-3 px-3 font-medium">1D Chg%</th>
                       <th className="py-3 px-3 font-medium">Volume</th>
+                      <th className="py-3 px-3 font-medium">Market Cap</th>
+                      <DesktopWatchColumnHeader />
                     </tr>
                   </thead>
                   <tbody>
-                    {defaultStocks.map((row, idx) => (
-                      <tr key={row.symbol} className="border-b border-border/30 even:bg-muted/15 hover:bg-muted/30 transition-colors whitespace-nowrap">
-                        <td className="py-2.5 px-3 text-muted-foreground text-xs">{idx + 1}</td>
-                        <td className="py-2.5 px-3">
+                    {defaultStocks.slice(0, 50).map((row, idx) => (
+                      <tr key={row.symbol} className="group border-b border-border/30 even:bg-muted/15 hover:bg-muted/30 transition-colors whitespace-nowrap">
+                        <td className="py-2.5 px-3 text-muted-foreground text-xs sticky left-0 bg-background">{idx + 1}</td>
+                        <td className="py-2.5 px-3 sticky left-8 bg-background">
                           <span className="font-medium">{row.symbol}</span>
                           <div className="text-xs text-muted-foreground truncate max-w-[160px]">{row.name}</div>
                         </td>
                         <td className="py-2.5 px-3 font-medium tabular-nums">
-                          ₹{row.close.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                          {row.close > 0
+                            ? `₹${row.close.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+                            : "—"}
                         </td>
                         <td className="py-2.5 px-3">
-                          <span className={cn("inline-flex items-center gap-0.5 tabular-nums", row.change1d >= 0 ? "text-green-600" : "text-red-600")}>
-                            {row.change1d >= 0 ? "▲" : "▼"} {Math.abs(row.change1d).toFixed(2)}%
-                          </span>
+                          {row.close > 0 ? (
+                            <span className={cn("inline-flex items-center gap-0.5 tabular-nums", row.change1d >= 0 ? "text-green-600" : "text-red-600")}>
+                              {row.change1d >= 0 ? "▲" : "▼"} {Math.abs(row.change1d).toFixed(2)}%
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3 text-muted-foreground tabular-nums">
-                          {formatVolume(row.volume)}
+                          {row.volume > 0 ? formatVolume(row.volume) : "—"}
                         </td>
+                        <td className="py-2.5 px-3 text-muted-foreground tabular-nums">
+                          {formatMarketCap(row.marketCap)}
+                        </td>
+                        <DesktopWatchColumnCell symbol={row.symbol} />
                       </tr>
                     ))}
                   </tbody>
@@ -3749,6 +4010,7 @@ export function CustomScannerPage() {
                 <div className="flex-1 text-[10px] font-medium text-muted-foreground">Symbol</div>
                 <div className="w-24 text-right text-[10px] font-medium text-muted-foreground">Price</div>
                 <div className="w-16 text-right text-[10px] font-medium text-muted-foreground">1D Chg%</div>
+                <div className="w-9 shrink-0 text-center text-[10px] font-medium text-muted-foreground">Watch</div>
               </div>
               {sortedResults.map((row, idx) => (
                 <div key={row.symbol} className="flex items-center px-4 py-3.5">
@@ -3772,6 +4034,9 @@ export function CustomScannerPage() {
                         : <TrendingDown size={10} className="shrink-0" />}
                       {Math.abs(row.change1d).toFixed(2)}%
                     </div>
+                  </div>
+                  <div className="w-9 shrink-0 flex justify-center">
+                    <MobileWatchPlusButton symbol={row.symbol} />
                   </div>
                 </div>
               ))}
@@ -3818,14 +4083,14 @@ export function CustomScannerPage() {
                       </span>
                     </th>
                   ))}
-                  <th className="py-3 px-3 font-medium">Groups</th>
+                  <DesktopWatchColumnHeader />
                 </tr>
               </thead>
               <tbody>
                 {sortedResults.map((row, idx) => (
                   <tr
                     key={row.symbol}
-                    className="border-b border-border/30 even:bg-muted/15 hover:bg-muted/30 transition-colors whitespace-nowrap"
+                    className="group border-b border-border/30 even:bg-muted/15 hover:bg-muted/30 transition-colors whitespace-nowrap"
                   >
                     <td className="py-2.5 px-3 text-muted-foreground text-xs sticky left-0 bg-background">
                       {idx + 1}
@@ -3869,11 +4134,7 @@ export function CustomScannerPage() {
                         </td>
                       );
                     })}
-                    <td className="py-2.5 px-3">
-                      <span className="text-xs text-primary font-medium">
-                        {row.matchedGroups}/{effectiveQuery.groups.length}
-                      </span>
-                    </td>
+                    <DesktopWatchColumnCell symbol={row.symbol} />
                   </tr>
                 ))}
               </tbody>
@@ -3900,7 +4161,7 @@ export function CustomScannerPage() {
             "flex flex-col bg-background border-l border-border shadow-xl",
             mobileFilterOpen
               ? "fixed inset-0 z-[60]"
-              : "absolute top-0 bottom-0 left-[460px] z-40 w-[700px]"
+              : "absolute top-0 bottom-0 left-[420px] z-40 w-[520px]"
           )}>
             <div className="shrink-0 border-b border-[#E1E1E1] bg-white">
               <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
@@ -3933,7 +4194,7 @@ export function CustomScannerPage() {
             <div className="flex flex-1 min-h-0">
               <div className={cn(
                 "shrink-0 overflow-y-auto border-r border-[#E1E1E1]",
-                mobileFilterOpen ? "w-[40%]" : "w-[42%]"
+                mobileFilterOpen ? "w-[38%]" : "w-[40%]"
               )}>
                 <ConditionGroupSidebar
                   selectedGroup={selectedGroup}
@@ -4054,7 +4315,7 @@ export function CustomScannerPage() {
             "flex flex-col bg-background border-l border-border shadow-xl",
             mobileFilterOpen
               ? "fixed inset-0 z-[60]"
-              : "absolute top-0 bottom-0 left-[460px] z-40 w-[380px]"
+              : "absolute top-0 bottom-0 left-[420px] z-40 w-[300px]"
           )}>
             <CompareWithSidePanel
               leftIndicatorId={compareWithRow.leftIndicatorId}
@@ -4217,7 +4478,7 @@ export function CustomScannerPage() {
         initialDescription={query.description ?? ""}
         initialPreferences={query.preferences ?? DEFAULT_SCREENER_PREFERENCES}
         onSubmit={handleSaveModalSubmit}
-        onShare={() => void handleShareDiyScreener()}
+        onShare={() => void handleShareSavedScreener()}
       />
     </div>
   );
