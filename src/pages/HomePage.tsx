@@ -7,9 +7,10 @@ import {
   ChevronRight, BarChart2, Star, Clock, BookOpen,
 } from "lucide-react";
 import {
-  PRE_BUILT_SCANNERS, MARKETPLACE_SCREENERS, MOCK_SCAN_RESULTS,
+  PRE_BUILT_SCANNERS, MARKETPLACE_SCREENERS,
   PERSONA_COLORS, PERSONA_LABELS, formatCount, type ScannerPersona,
 } from "@/data/mockData";
+import { AppScannersHubMarketSections } from "@/components/scanner/AppScannersHubMarketSections";
 
 const TRENDING_SCANNERS = PRE_BUILT_SCANNERS.filter(s => s.plan === "free").slice(0, 6);
 const TOP_MARKETPLACE = MARKETPLACE_SCREENERS.filter(s => s.isEditorChoice || s.isFeatured).slice(0, 3);
@@ -73,28 +74,11 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Live Market Ticker (Mock) */}
-      <section className="mb-12">
-        <div className="rounded-xl border border-border bg-muted/30 p-4 overflow-hidden">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Market Signals</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {MOCK_SCAN_RESULTS.slice(0, 4).map((r) => (
-              <div key={r.symbol} className="bg-white rounded-lg p-3 border border-border">
-                <div className="flex items-start justify-between gap-1">
-                  <span className="font-bold text-sm text-foreground">{r.symbol}</span>
-                  <span className={`text-xs font-semibold ${r.change1d >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {r.change1d >= 0 ? "+" : ""}{r.change1d.toFixed(2)}%
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{r.signalReason}</p>
-              </div>
-            ))}
-          </div>
+      <div className="mb-12 -mx-4 sm:-mx-6 px-4 sm:px-6 py-6 sm:py-8">
+        <div className="max-w-lg lg:max-w-6xl mx-auto">
+          <AppScannersHubMarketSections />
         </div>
-      </section>
+      </div>
 
       {/* Scanner Categories */}
       <section className="mb-16">
