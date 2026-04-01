@@ -605,20 +605,110 @@ export function ScannerDetailPage() {
             </CardHeader>
 
             {isPlus ? (
-              <CardContent className="p-8 text-center">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <Lock className="w-8 h-8 text-primary" />
+              <CardContent className="p-0">
+                <div className="overflow-x-auto border-b border-border/60">
+                  <table className="w-full text-sm table-fixed">
+                    <colgroup>
+                      <col className="w-8" />
+                      <col className="w-[24%]" />
+                      <col className="w-[17%]" />
+                      <col className="w-[15%]" />
+                      <col className="w-[15%]" />
+                      <col className="w-[13%]" />
+                      <col className="w-[16%]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="bg-muted/40 border-b border-border">
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground w-8">#</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Stock</th>
+                        <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Price (₹)</th>
+                        <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">1D Chg%</th>
+                        <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Volume</th>
+                        <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Market Cap</th>
+                        <th className="text-right px-3 py-2.5 text-xs font-semibold text-muted-foreground">Watch</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.slice(0, 1).map((row) => (
+                        <tr key={`plus-visible-${row.symbol}`} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{row.rank}</td>
+                          <td className="px-4 py-3">
+                            <div className="font-semibold text-sm text-foreground">{row.symbol}</div>
+                            <div className="text-xs text-muted-foreground truncate">{row.company}</div>
+                          </td>
+                          <td className="px-4 py-3 text-right font-medium text-sm text-foreground">
+                            ₹{row.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className={cn("text-sm font-semibold", row.change1d >= 0 ? "text-green-600" : "text-red-600")}>
+                              {row.change1d >= 0 ? "+" : ""}{row.change1d.toFixed(2)}%
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm text-foreground">
+                            {formatVolume(row.volume)}
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm text-foreground tabular-nums">
+                            {formatMarketCapFromCr(MARKET_CAP_BY_SYMBOL_CR[row.symbol])}
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs">Watch</Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                <h3 className="font-semibold text-foreground mb-2">Plus Plan Required</h3>
-                <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
-                  This scanner is part of the Advanced Pack, exclusive to Upstox Plus subscribers.
-                </p>
-                <Button className="bg-gradient-to-r from-[#542087] to-[#7c3abf]">
-                  <Zap className="w-4 h-4 mr-2" />Upgrade to Plus
-                </Button>
-                <p className="text-xs text-muted-foreground mt-3">
-                  The education module above is free for all users
-                </p>
+
+                <div className="relative">
+                  <div className="overflow-x-auto blur-[2px] select-none pointer-events-none">
+                    <table className="w-full text-sm table-fixed">
+                      <colgroup>
+                        <col className="w-8" />
+                        <col className="w-[24%]" />
+                        <col className="w-[17%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[13%]" />
+                        <col className="w-[16%]" />
+                      </colgroup>
+                      <tbody className="divide-y divide-border/60">
+                        {sorted.slice(1, 8).map((row) => (
+                          <tr key={`plus-blur-${row.symbol}`}>
+                            <td className="px-4 py-3 text-xs text-muted-foreground">{row.rank}</td>
+                            <td className="px-4 py-3">
+                              <div className="font-semibold text-sm text-foreground">{row.symbol}</div>
+                              <div className="text-xs text-muted-foreground truncate">{row.company}</div>
+                            </td>
+                            <td className="px-4 py-3 text-right font-medium text-sm text-foreground">
+                              ₹{row.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-4 py-3 text-right text-sm font-semibold">{row.change1d.toFixed(2)}%</td>
+                            <td className="px-4 py-3 text-right text-sm text-foreground">{formatVolume(row.volume)}</td>
+                            <td className="px-4 py-3 text-right text-sm text-foreground tabular-nums">
+                              {formatMarketCapFromCr(MARKET_CAP_BY_SYMBOL_CR[row.symbol])}
+                            </td>
+                            <td className="px-3 py-3 text-right text-sm text-muted-foreground">Locked</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="absolute inset-0 flex items-center justify-center px-4">
+                    <div className="rounded-xl border border-primary/30 bg-background/95 shadow-sm px-5 py-4 text-center max-w-sm">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">
+                        <Lock className="w-5 h-5 text-primary" />
+                      </div>
+                      <h3 className="font-semibold text-foreground mb-1">Plus Plan Required</h3>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Unlock all remaining stock results for this scanner.
+                      </p>
+                      <Button className="bg-gradient-to-r from-[#542087] to-[#7c3abf] h-8 text-xs">
+                        <Zap className="w-3.5 h-3.5 mr-1.5" />Upgrade to Plus
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             ) : (
               <>

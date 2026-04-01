@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1154,6 +1154,49 @@ function candlestickOutlook(row: CandlestickDetectionRow): string {
   return "Sellers are dominant; weakness can extend in the near term.";
 }
 
+type RelativeStrengthMode = "sector_rotation" | "outperform_nifty50" | "sector_top_gainers";
+type RelativeStrengthTimeframe = "1d" | "1w" | "1M";
+
+const RELATIVE_STRENGTH_TIMEFRAME_OPTIONS: Array<{ value: RelativeStrengthTimeframe; label: string }> = [
+  { value: "1d", label: "1D" },
+  { value: "1w", label: "1W" },
+  { value: "1M", label: "1Month" },
+];
+
+const RELATIVE_STRENGTH_MODE_OPTIONS: Array<{ value: RelativeStrengthMode; label: string }> = [
+  { value: "sector_rotation", label: "Sector Rotation Leaders" },
+  { value: "outperform_nifty50", label: "Stocks Outperforming Nifty 50" },
+  { value: "sector_top_gainers", label: "Sector-Wise Top Gainers" },
+];
+
+interface RelativeStrengthRow {
+  symbol: string;
+  sector: string;
+  indexUniverse: string;
+  returns: Record<RelativeStrengthTimeframe, number>;
+  sectorReturns: Record<RelativeStrengthTimeframe, number>;
+  niftyReturns: Record<RelativeStrengthTimeframe, number>;
+}
+
+const RELATIVE_STRENGTH_ROWS: RelativeStrengthRow[] = [
+  { symbol: "RELIANCE", sector: "Energy", indexUniverse: "Nifty 50", returns: { "1d": 2.1, "1w": 5.4, "1M": 9.8 }, sectorReturns: { "1d": 1.2, "1w": 3.1, "1M": 6.2 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "ONGC", sector: "Energy", indexUniverse: "Nifty 50", returns: { "1d": 1.4, "1w": 4.8, "1M": 8.1 }, sectorReturns: { "1d": 1.2, "1w": 3.1, "1M": 6.2 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "HDFCBANK", sector: "Banking", indexUniverse: "Nifty 50", returns: { "1d": 1.6, "1w": 3.2, "1M": 6.7 }, sectorReturns: { "1d": 1.0, "1w": 2.2, "1M": 4.4 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "ICICIBANK", sector: "Banking", indexUniverse: "Nifty 50", returns: { "1d": 2.0, "1w": 4.6, "1M": 8.8 }, sectorReturns: { "1d": 1.0, "1w": 2.2, "1M": 4.4 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "INFY", sector: "IT", indexUniverse: "Nifty 50", returns: { "1d": 1.1, "1w": 2.9, "1M": 7.4 }, sectorReturns: { "1d": 0.7, "1w": 1.8, "1M": 4.9 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "TCS", sector: "IT", indexUniverse: "Nifty 50", returns: { "1d": 0.9, "1w": 2.6, "1M": 6.2 }, sectorReturns: { "1d": 0.7, "1w": 1.8, "1M": 4.9 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "SUNPHARMA", sector: "Pharma", indexUniverse: "Nifty 50", returns: { "1d": 1.8, "1w": 4.1, "1M": 7.9 }, sectorReturns: { "1d": 1.1, "1w": 2.5, "1M": 5.3 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "DRREDDY", sector: "Pharma", indexUniverse: "Nifty 50", returns: { "1d": 1.5, "1w": 3.7, "1M": 7.0 }, sectorReturns: { "1d": 1.1, "1w": 2.5, "1M": 5.3 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "BHARTIARTL", sector: "Telecom", indexUniverse: "Nifty 100", returns: { "1d": 2.3, "1w": 5.7, "1M": 11.4 }, sectorReturns: { "1d": 1.3, "1w": 3.4, "1M": 6.8 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "IDEA", sector: "Telecom", indexUniverse: "Nifty 100", returns: { "1d": 3.1, "1w": 7.4, "1M": 14.2 }, sectorReturns: { "1d": 1.3, "1w": 3.4, "1M": 6.8 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "MARUTI", sector: "Auto", indexUniverse: "Nifty 100", returns: { "1d": 1.7, "1w": 4.0, "1M": 8.1 }, sectorReturns: { "1d": 1.0, "1w": 2.6, "1M": 5.0 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "TATAMOTORS", sector: "Auto", indexUniverse: "Nifty 100", returns: { "1d": 2.6, "1w": 6.2, "1M": 12.7 }, sectorReturns: { "1d": 1.0, "1w": 2.6, "1M": 5.0 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "LT", sector: "Capital Goods", indexUniverse: "Nifty 200", returns: { "1d": 1.9, "1w": 4.5, "1M": 9.2 }, sectorReturns: { "1d": 1.2, "1w": 3.0, "1M": 6.1 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "SIEMENS", sector: "Capital Goods", indexUniverse: "Nifty 200", returns: { "1d": 2.8, "1w": 6.8, "1M": 13.9 }, sectorReturns: { "1d": 1.2, "1w": 3.0, "1M": 6.1 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "ADANIENT", sector: "Infrastructure", indexUniverse: "Nifty 500", returns: { "1d": 2.9, "1w": 7.1, "1M": 15.4 }, sectorReturns: { "1d": 1.4, "1w": 3.8, "1M": 7.5 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "RVNL", sector: "Infrastructure", indexUniverse: "Nifty 500", returns: { "1d": 3.4, "1w": 8.2, "1M": 16.9 }, sectorReturns: { "1d": 1.4, "1w": 3.8, "1M": 7.5 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+];
+
 /** Fallback brand colors per symbol. */
 const STOCK_COLORS: Record<string, string> = {
   RELIANCE: "#3B82F6", HDFCBANK: "#1E40AF", INFY: "#0EA5E9", WIPRO: "#6366F1",
@@ -1535,6 +1578,13 @@ export function AppScannersHubMarketSections() {
   const [candlestickIndex, setCandlestickIndex] = useState<string>("Nifty 50");
   const [candlestickTimeframe, setCandlestickTimeframe] = useState<CandlestickTimeframe>("15m");
   const [candlestickFamily, setCandlestickFamily] = useState<CandlestickFamily>("bullish_reversal");
+  const [relativeStrengthIndex, setRelativeStrengthIndex] = useState<string>("Nifty 50");
+  const [relativeStrengthTimeframe, setRelativeStrengthTimeframe] = useState<RelativeStrengthTimeframe>("1d");
+  const [relativeStrengthMode, setRelativeStrengthMode] = useState<RelativeStrengthMode>("sector_rotation");
+  const [relativeStrengthSector, setRelativeStrengthSector] = useState<string>("All");
+  const [relativeStrengthIndexSheetOpen, setRelativeStrengthIndexSheetOpen] = useState(false);
+  const [relativeStrengthTimeframeSheetOpen, setRelativeStrengthTimeframeSheetOpen] = useState(false);
+  const [relativeStrengthSectorSheetOpen, setRelativeStrengthSectorSheetOpen] = useState(false);
   const [indexSheetOpen, setIndexSheetOpen] = useState(false);
   const [timeframeSheetOpen, setTimeframeSheetOpen] = useState(false);
 
@@ -1590,6 +1640,54 @@ export function AppScannersHubMarketSections() {
       return true;
     });
   }, [candlestickFamily, candlestickIndex, candlestickTimeframe]);
+
+  const relativeStrengthSectors = useMemo(() => {
+    const sectors = new Set(
+      RELATIVE_STRENGTH_ROWS.filter((row) => row.indexUniverse === relativeStrengthIndex).map((row) => row.sector)
+    );
+    return ["All", ...Array.from(sectors)];
+  }, [relativeStrengthIndex]);
+
+  const relativeStrengthRows = useMemo(() => {
+    const rows = RELATIVE_STRENGTH_ROWS.filter((row) => row.indexUniverse === relativeStrengthIndex);
+    const tf = relativeStrengthTimeframe;
+
+    if (relativeStrengthMode === "sector_rotation") {
+      return [...rows]
+        .sort((a, b) => (b.returns[tf] - b.sectorReturns[tf]) - (a.returns[tf] - a.sectorReturns[tf]))
+        .slice(0, 6);
+    }
+
+    if (relativeStrengthMode === "outperform_nifty50") {
+      return [...rows]
+        .sort((a, b) => (b.returns[tf] - b.niftyReturns[tf]) - (a.returns[tf] - a.niftyReturns[tf]))
+        .slice(0, 6);
+    }
+
+    if (relativeStrengthSector === "All") {
+      const bySector = new Map<string, RelativeStrengthRow>();
+      rows.forEach((row) => {
+        const current = bySector.get(row.sector);
+        if (!current || row.returns[tf] > current.returns[tf]) {
+          bySector.set(row.sector, row);
+        }
+      });
+      return Array.from(bySector.values())
+        .sort((a, b) => b.returns[tf] - a.returns[tf])
+        .slice(0, 8);
+    }
+
+    return rows
+      .filter((row) => row.sector === relativeStrengthSector)
+      .sort((a, b) => b.returns[tf] - a.returns[tf])
+      .slice(0, 5);
+  }, [relativeStrengthIndex, relativeStrengthMode, relativeStrengthSector, relativeStrengthTimeframe]);
+
+  useEffect(() => {
+    if (!relativeStrengthSectors.includes(relativeStrengthSector)) {
+      setRelativeStrengthSector("All");
+    }
+  }, [relativeStrengthSector, relativeStrengthSectors]);
 
   return (
     <>
@@ -1845,84 +1943,236 @@ export function AppScannersHubMarketSections() {
           </div>
         </section>
 
-        <section className="mb-6 lg:mb-8" aria-label="Candlesticks scan">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl leading-7 font-bold text-foreground">Candlesticks Scan</h2>
-          </div>
+        <section className="mb-6 lg:mb-8" aria-label="Candlesticks and relative strength scans">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xl leading-7 font-bold text-foreground">Candlesticks Scan</h2>
+              </div>
 
-          <div className="p-0">
-            <div className="mb-4">
-              <div className="flex h-11 items-center gap-3 overflow-x-auto whitespace-nowrap">
-                <button
-                  type="button"
-                  onClick={() => setIndexSheetOpen(true)}
-                  className={cn(
-                    "shrink-0 box-border inline-flex w-auto max-w-none items-center gap-[2px] h-[28px] rounded-[6px] border transition-colors",
-                    "pl-[10px] pr-[6px] py-[6px]",
-                    indexSheetOpen ? "bg-muted/60 border-foreground/25" : "bg-[#FFFFFF] border-[#E1E1E1]"
+              <div className="p-0">
+                <div className="mb-4">
+                  <div className="flex h-11 items-center gap-3 overflow-x-auto whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => setIndexSheetOpen(true)}
+                      className={cn(
+                        "shrink-0 box-border inline-flex w-auto max-w-none items-center gap-[2px] h-[28px] rounded-[6px] border transition-colors",
+                        "pl-[10px] pr-[6px] py-[6px]",
+                        indexSheetOpen ? "bg-muted/60 border-foreground/25" : "bg-[#FFFFFF] border-[#E1E1E1]"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "h-[16px] text-[12px] font-semibold leading-[16px] flex items-center whitespace-nowrap",
+                          indexSheetOpen ? "text-foreground" : "text-[#262626]"
+                        )}
+                      >
+                        {candlestickIndex}
+                      </span>
+                      <span className="flex h-[16px] w-[16px] items-center justify-center" aria-hidden="true">
+                        <span
+                          className="h-0 w-0"
+                          style={{
+                            borderLeft: "5px solid transparent",
+                            borderRight: "5px solid transparent",
+                            borderTop: `7px solid ${indexSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
+                          }}
+                        />
+                      </span>
+                    </button>
+                    <span className="h-7 w-px shrink-0 bg-[#F1F1F1]" aria-hidden />
+                    <button
+                      type="button"
+                      onClick={() => setTimeframeSheetOpen(true)}
+                      className={cn(
+                        "shrink-0 box-border inline-flex w-auto max-w-none items-center gap-[2px] h-[28px] rounded-[6px] border transition-colors",
+                        "pl-[10px] pr-[6px] py-[6px]",
+                        timeframeSheetOpen ? "bg-muted/60 border-foreground/25" : "bg-[#FFFFFF] border-[#E1E1E1]"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "h-[16px] text-[12px] font-semibold leading-[16px] flex items-center whitespace-nowrap",
+                          timeframeSheetOpen ? "text-foreground" : "text-[#262626]"
+                        )}
+                      >
+                        {CANDLESTICK_TIMEFRAME_OPTIONS.find((opt) => opt.value === candlestickTimeframe)?.label ?? "Timeframe"}
+                      </span>
+                      <span className="flex h-[16px] w-[16px] items-center justify-center" aria-hidden="true">
+                        <span
+                          className="h-0 w-0"
+                          style={{
+                            borderLeft: "5px solid transparent",
+                            borderRight: "5px solid transparent",
+                            borderTop: `7px solid ${timeframeSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
+                          }}
+                        />
+                      </span>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      {CANDLESTICK_FAMILY_OPTIONS.map((opt) => {
+                        const active = candlestickFamily === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setCandlestickFamily(opt.value)}
+                            className={cn(
+                              "inline-flex h-7 items-center justify-center rounded-md border px-3 text-xs font-semibold",
+                              active
+                                ? "border-foreground/30 bg-muted text-foreground"
+                                : "border-[#E1E1E1] bg-white text-[#262626]"
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="flex items-center border-b border-border/60 px-3 py-2.5 bg-muted/20">
+                    <div className="w-[120px] shrink-0 text-[10px] font-medium text-muted-foreground">Scrip</div>
+                    <div className="flex-1 text-[10px] font-medium text-muted-foreground">SparkCandle</div>
+                    <div className="w-[150px] shrink-0 text-right text-[10px] font-medium text-muted-foreground">Price</div>
+                  </div>
+                  {candlestickRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-3">
+                      No candlestick detections for selected filters.
+                    </p>
+                  ) : (
+                    candlestickRows.map((row, idx) => {
+                      const up = row.changePct >= 0;
+                      const toneTagClass = up
+                        ? "bg-[linear-gradient(90deg,#DEF5ED_24%,rgba(114,216,181,0)_100%)] text-[#008858]"
+                        : "bg-[linear-gradient(90deg,#FCE7E7_24%,rgba(239,68,68,0)_100%)] text-[#B91C1C]";
+                      const ToneIcon = up ? TrendingUp : TrendingDown;
+                      return (
+                        <div
+                          key={`${row.symbol}-${row.detectedPattern}-${row.timeframe}`}
+                          className={cn("px-3 py-3", idx !== candlestickRows.length - 1 && "border-b border-border/50")}
+                        >
+                          <div className="grid grid-cols-[120px_1fr_150px] items-start gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[14px] font-semibold text-foreground leading-5">{row.symbol}</p>
+                            </div>
+
+                            <div className="min-w-0">
+                              <img
+                                src={candlestickPatternImage(row.family)}
+                                alt={`${row.detectedPattern} pattern preview`}
+                                className="h-14 w-24 object-cover"
+                                loading="lazy"
+                              />
+                              <p className="mt-1.5 text-[12px] font-medium text-foreground leading-4 whitespace-nowrap">{row.detectedPattern}</p>
+                            </div>
+
+                            <div className="min-w-0 text-right">
+                              <p className="text-[14px] font-semibold text-foreground">{formatInr(row.ltp)}</p>
+                              <p className={cn("text-[12px] mt-0.5", up ? "text-[#008858]" : "text-[#D53627]")}>
+                                {up ? "+" : ""}{row.changeAbs.toFixed(2)} ({up ? "+" : ""}{row.changePct.toFixed(2)}%)
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-2 flex h-6 items-center rounded-[4px] bg-muted/40 px-2 py-1">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[10px] font-medium leading-4 text-[#262626]">
+                                {candlestickOutlook(row)}
+                              </p>
+                            </div>
+                            <div className="ml-1 inline-flex h-4 items-center justify-center rounded-[4px] px-1">
+                              <span className={cn("inline-flex items-center gap-0.5 rounded-[4px] px-1 py-0 text-[10px] font-semibold leading-4", toneTagClass)}>
+                                {up ? "Bullish" : "Bearish"}
+                                <ToneIcon className="h-3 w-3" aria-hidden />
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
-                >
-                  <span
-                    className={cn(
-                      "h-[16px] text-[12px] font-semibold leading-[16px] flex items-center whitespace-nowrap",
-                      indexSheetOpen ? "text-foreground" : "text-[#262626]"
-                    )}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xl leading-7 font-bold text-foreground">Sector &amp; Relative Strength Leaders</h2>
+              </div>
+
+              <div className="mb-4">
+                <div className="flex h-11 items-center gap-3 overflow-x-auto whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => setRelativeStrengthIndexSheetOpen(true)}
+                    className="h-[28px] rounded-[6px] border border-[#E1E1E1] bg-white px-[10px] text-[12px] font-semibold text-[#262626]"
                   >
-                    {candlestickIndex}
-                  </span>
-                  <span className="flex h-[16px] w-[16px] items-center justify-center" aria-hidden="true">
-                    <span
-                      className="h-0 w-0"
-                      style={{
-                        borderLeft: "5px solid transparent",
-                        borderRight: "5px solid transparent",
-                        borderTop: `7px solid ${indexSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
-                      }}
-                    />
-                  </span>
-                </button>
-                <span className="h-7 w-px shrink-0 bg-[#F1F1F1]" aria-hidden />
-                <button
-                  type="button"
-                  onClick={() => setTimeframeSheetOpen(true)}
-                  className={cn(
-                    "shrink-0 box-border inline-flex w-auto max-w-none items-center gap-[2px] h-[28px] rounded-[6px] border transition-colors",
-                    "pl-[10px] pr-[6px] py-[6px]",
-                    timeframeSheetOpen ? "bg-muted/60 border-foreground/25" : "bg-[#FFFFFF] border-[#E1E1E1]"
+                    <span className="inline-flex items-center gap-1">
+                      {relativeStrengthIndex}
+                      <span
+                        className="h-0 w-0"
+                        style={{
+                          borderLeft: "4px solid transparent",
+                          borderRight: "4px solid transparent",
+                          borderTop: `6px solid ${relativeStrengthIndexSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
+                        }}
+                      />
+                    </span>
+                  </button>
+
+                  <span className="h-7 w-px shrink-0 bg-[#F1F1F1]" aria-hidden />
+
+                  <button
+                    type="button"
+                    onClick={() => setRelativeStrengthTimeframeSheetOpen(true)}
+                    className="h-[28px] rounded-[6px] border border-[#E1E1E1] bg-white px-[10px] text-[12px] font-semibold text-[#262626]"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {RELATIVE_STRENGTH_TIMEFRAME_OPTIONS.find((opt) => opt.value === relativeStrengthTimeframe)?.label ?? "Timeframe"}
+                      <span
+                        className="h-0 w-0"
+                        style={{
+                          borderLeft: "4px solid transparent",
+                          borderRight: "4px solid transparent",
+                          borderTop: `6px solid ${relativeStrengthTimeframeSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
+                        }}
+                      />
+                    </span>
+                  </button>
+
+                  {relativeStrengthMode === "sector_top_gainers" && (
+                    <button
+                      type="button"
+                      onClick={() => setRelativeStrengthSectorSheetOpen(true)}
+                      className="h-[28px] rounded-[6px] border border-[#E1E1E1] bg-white px-[10px] text-[12px] font-semibold text-[#262626]"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {relativeStrengthSector}
+                        <span
+                          className="h-0 w-0"
+                          style={{
+                            borderLeft: "4px solid transparent",
+                            borderRight: "4px solid transparent",
+                            borderTop: `6px solid ${relativeStrengthSectorSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
+                          }}
+                        />
+                      </span>
+                    </button>
                   )}
-                >
-                  <span
-                    className={cn(
-                      "h-[16px] text-[12px] font-semibold leading-[16px] flex items-center whitespace-nowrap",
-                      timeframeSheetOpen ? "text-foreground" : "text-[#262626]"
-                    )}
-                  >
-                    {CANDLESTICK_TIMEFRAME_OPTIONS.find((opt) => opt.value === candlestickTimeframe)?.label ?? "Timeframe"}
-                  </span>
-                  <span className="flex h-[16px] w-[16px] items-center justify-center" aria-hidden="true">
-                    <span
-                      className="h-0 w-0"
-                      style={{
-                        borderLeft: "5px solid transparent",
-                        borderRight: "5px solid transparent",
-                        borderTop: `7px solid ${timeframeSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
-                      }}
-                    />
-                  </span>
-                </button>
-                <div className="flex items-center gap-2">
-                  {CANDLESTICK_FAMILY_OPTIONS.map((opt) => {
-                    const active = candlestickFamily === opt.value;
+                  {RELATIVE_STRENGTH_MODE_OPTIONS.map((opt) => {
+                    const active = relativeStrengthMode === opt.value;
                     return (
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => setCandlestickFamily(opt.value)}
+                        onClick={() => setRelativeStrengthMode(opt.value)}
                         className={cn(
-                          "inline-flex h-7 items-center justify-center rounded-md border px-3 text-xs font-semibold",
-                          active
-                            ? "border-foreground/30 bg-muted text-foreground"
-                            : "border-[#E1E1E1] bg-white text-[#262626]"
+                          "inline-flex h-7 items-center justify-center rounded-md border px-3 text-xs font-semibold whitespace-nowrap",
+                          active ? "border-foreground/30 bg-muted text-foreground" : "border-[#E1E1E1] bg-white text-[#262626]"
                         )}
                       >
                         {opt.label}
@@ -1931,70 +2181,53 @@ export function AppScannersHubMarketSections() {
                   })}
                 </div>
               </div>
-            </div>
 
-            <div className="mt-3">
-              <div className="flex items-center border-b border-border/60 px-3 py-2.5 bg-muted/20">
-                <div className="w-[120px] shrink-0 text-[10px] font-medium text-muted-foreground">Scrip</div>
-                <div className="flex-1 text-[10px] font-medium text-muted-foreground">SparkCandle</div>
-                <div className="w-[150px] shrink-0 text-right text-[10px] font-medium text-muted-foreground">Price</div>
-              </div>
-              {candlestickRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-3">
-                  No candlestick detections for selected filters.
-                </p>
-              ) : (
-                candlestickRows.map((row, idx) => {
-                  const up = row.changePct >= 0;
-                  const toneTagClass = up
-                    ? "bg-[linear-gradient(90deg,#DEF5ED_24%,rgba(114,216,181,0)_100%)] text-[#008858]"
-                    : "bg-[linear-gradient(90deg,#FCE7E7_24%,rgba(239,68,68,0)_100%)] text-[#B91C1C]";
-                  const ToneIcon = up ? TrendingUp : TrendingDown;
+              <div className="mt-3">
+                <div className="flex items-center border-b border-border/60 px-3 py-2.5 bg-muted/20">
+                  <div className="w-[140px] shrink-0 text-[10px] font-medium text-muted-foreground">Scrip</div>
+                  <div className="flex-1 text-right text-[10px] font-medium text-muted-foreground">Returns ({RELATIVE_STRENGTH_TIMEFRAME_OPTIONS.find((o) => o.value === relativeStrengthTimeframe)?.label})</div>
+                  <div className="w-[150px] shrink-0 text-right text-[10px] font-medium text-muted-foreground">
+                    {relativeStrengthMode === "sector_rotation"
+                      ? `Sector Returns (${RELATIVE_STRENGTH_TIMEFRAME_OPTIONS.find((o) => o.value === relativeStrengthTimeframe)?.label})`
+                      : relativeStrengthMode === "outperform_nifty50"
+                        ? `Nifty 50 (${RELATIVE_STRENGTH_TIMEFRAME_OPTIONS.find((o) => o.value === relativeStrengthTimeframe)?.label})`
+                        : "Sector"}
+                  </div>
+                </div>
+
+                {relativeStrengthRows.map((row, idx) => {
+                  const stockVal = row.returns[relativeStrengthTimeframe];
+                  const stockUp = stockVal >= 0;
+                  const refVal =
+                    relativeStrengthMode === "sector_rotation"
+                      ? row.sectorReturns[relativeStrengthTimeframe]
+                      : row.niftyReturns[relativeStrengthTimeframe];
+                  const refUp = refVal >= 0;
                   return (
-                    <div
-                      key={`${row.symbol}-${row.detectedPattern}-${row.timeframe}`}
-                      className={cn("px-3 py-3", idx !== candlestickRows.length - 1 && "border-b border-border/50")}
-                    >
-                      <div className="grid grid-cols-[120px_1fr_150px] items-start gap-3">
+                    <div key={`${row.symbol}-${row.sector}-${relativeStrengthMode}`} className={cn("px-3 py-3", idx !== relativeStrengthRows.length - 1 && "border-b border-border/50")}>
+                      <div className="grid grid-cols-[140px_1fr_150px] items-center gap-3">
                         <div className="min-w-0">
                           <p className="text-[14px] font-semibold text-foreground leading-5">{row.symbol}</p>
                         </div>
-
-                        <div className="min-w-0">
-                          <img
-                            src={candlestickPatternImage(row.family)}
-                            alt={`${row.detectedPattern} pattern preview`}
-                            className="h-14 w-24 object-cover"
-                            loading="lazy"
-                          />
-                          <p className="mt-1.5 text-[12px] font-medium text-foreground leading-4 whitespace-nowrap">{row.detectedPattern}</p>
-                        </div>
-
-                        <div className="min-w-0 text-right">
-                          <p className="text-[14px] font-semibold text-foreground">{formatInr(row.ltp)}</p>
-                          <p className={cn("text-[12px] mt-0.5", up ? "text-[#008858]" : "text-[#D53627]")}>
-                            {up ? "+" : ""}{row.changeAbs.toFixed(2)} ({up ? "+" : ""}{row.changePct.toFixed(2)}%)
+                        <div className="text-right">
+                          <p className={cn("text-[13px] font-semibold", stockUp ? "text-[#008858]" : "text-[#D53627]")}>
+                            {stockUp ? "+" : ""}{stockVal.toFixed(2)}%
                           </p>
                         </div>
-                      </div>
-
-                      <div className="mt-2 flex h-6 items-center rounded-[4px] bg-muted/40 px-2 py-1">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[10px] font-medium leading-4 text-[#262626]">
-                            {candlestickOutlook(row)}
-                          </p>
-                        </div>
-                        <div className="ml-1 inline-flex h-4 items-center justify-center rounded-[4px] px-1">
-                          <span className={cn("inline-flex items-center gap-0.5 rounded-[4px] px-1 py-0 text-[10px] font-semibold leading-4", toneTagClass)}>
-                            {up ? "Bullish" : "Bearish"}
-                            <ToneIcon className="h-3 w-3" aria-hidden />
-                          </span>
+                        <div className="text-right">
+                          {relativeStrengthMode === "sector_top_gainers" ? (
+                            <p className="text-[12px] text-muted-foreground">{row.sector}</p>
+                          ) : (
+                            <p className={cn("text-[12px] font-medium", refUp ? "text-[#008858]" : "text-[#D53627]")}>
+                              {refUp ? "+" : ""}{refVal.toFixed(2)}%
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
                   );
-                })
-              )}
+                })}
+              </div>
             </div>
           </div>
 
@@ -2062,6 +2295,99 @@ export function AppScannersHubMarketSections() {
                           {active ? <span className="h-2 w-2 rounded-full bg-foreground" /> : null}
                         </span>
                         <span className="text-xs font-semibold text-[#262626]">{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={relativeStrengthIndexSheetOpen} onOpenChange={setRelativeStrengthIndexSheetOpen}>
+            <DialogContent className="!p-0 !gap-0 !border-0 !shadow-none !rounded-t-2xl !rounded-b-none !bg-white w-full max-w-none h-auto max-h-[calc(100vh-20px)] overflow-hidden !left-0 !top-auto !bottom-0 !translate-x-0 !translate-y-0 sm:rounded-t-2xl [&>button]:hidden">
+              <div className="flex flex-col bg-white">
+                <div className="border-b border-[#F1F1F1] px-4 py-4">
+                  <DialogTitle className="text-[14px] font-medium leading-6 text-[#262626]">Filter by</DialogTitle>
+                </div>
+                <div className="px-4 py-3 space-y-4">
+                  {CANDLESTICK_INDEX_OPTIONS.map((opt) => {
+                    const active = relativeStrengthIndex === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          setRelativeStrengthIndex(opt);
+                          setRelativeStrengthIndexSheetOpen(false);
+                        }}
+                        className="flex items-center gap-2 text-left"
+                      >
+                        <span className={cn("inline-flex h-4 w-4 items-center justify-center rounded-full border-[1.5px]", active ? "border-foreground" : "border-[#919191]")}>
+                          {active ? <span className="h-2 w-2 rounded-full bg-foreground" /> : null}
+                        </span>
+                        <span className="text-xs font-semibold text-[#262626]">{opt}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={relativeStrengthTimeframeSheetOpen} onOpenChange={setRelativeStrengthTimeframeSheetOpen}>
+            <DialogContent className="!p-0 !gap-0 !border-0 !shadow-none !rounded-t-2xl !rounded-b-none !bg-white w-full max-w-none h-auto max-h-[calc(100vh-20px)] overflow-hidden !left-0 !top-auto !bottom-0 !translate-x-0 !translate-y-0 sm:rounded-t-2xl [&>button]:hidden">
+              <div className="flex flex-col bg-white">
+                <div className="border-b border-[#F1F1F1] px-4 py-4">
+                  <DialogTitle className="text-[14px] font-medium leading-6 text-[#262626]">Timeframe</DialogTitle>
+                </div>
+                <div className="px-4 py-3 space-y-4">
+                  {RELATIVE_STRENGTH_TIMEFRAME_OPTIONS.map((opt) => {
+                    const active = relativeStrengthTimeframe === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setRelativeStrengthTimeframe(opt.value);
+                          setRelativeStrengthTimeframeSheetOpen(false);
+                        }}
+                        className="flex items-center gap-2 text-left"
+                      >
+                        <span className={cn("inline-flex h-4 w-4 items-center justify-center rounded-full border-[1.5px]", active ? "border-foreground" : "border-[#919191]")}>
+                          {active ? <span className="h-2 w-2 rounded-full bg-foreground" /> : null}
+                        </span>
+                        <span className="text-xs font-semibold text-[#262626]">{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={relativeStrengthSectorSheetOpen} onOpenChange={setRelativeStrengthSectorSheetOpen}>
+            <DialogContent className="!p-0 !gap-0 !border-0 !shadow-none !rounded-t-2xl !rounded-b-none !bg-white w-full max-w-none h-auto max-h-[calc(100vh-20px)] overflow-hidden !left-0 !top-auto !bottom-0 !translate-x-0 !translate-y-0 sm:rounded-t-2xl [&>button]:hidden">
+              <div className="flex flex-col bg-white">
+                <div className="border-b border-[#F1F1F1] px-4 py-4">
+                  <DialogTitle className="text-[14px] font-medium leading-6 text-[#262626]">Sector</DialogTitle>
+                </div>
+                <div className="px-4 py-3 space-y-4">
+                  {relativeStrengthSectors.map((opt) => {
+                    const active = relativeStrengthSector === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          setRelativeStrengthSector(opt);
+                          setRelativeStrengthSectorSheetOpen(false);
+                        }}
+                        className="flex items-center gap-2 text-left"
+                      >
+                        <span className={cn("inline-flex h-4 w-4 items-center justify-center rounded-full border-[1.5px]", active ? "border-foreground" : "border-[#919191]")}>
+                          {active ? <span className="h-2 w-2 rounded-full bg-foreground" /> : null}
+                        </span>
+                        <span className="text-xs font-semibold text-[#262626]">{opt}</span>
                       </button>
                     );
                   })}
