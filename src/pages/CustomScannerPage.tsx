@@ -1217,6 +1217,14 @@ function IndicatorSidebar({
   customItems?: { id: string; label: string; locked?: boolean }[];
   disableSelection?: boolean;
 }) {
+  const plusSeed = (value: string) => {
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+      hash = (hash * 33 + value.charCodeAt(i)) % 1000003;
+    }
+    return hash;
+  };
+  const isPlusBadge = (value: string) => plusSeed(value) % 10 < 3; // ~30%
   const q = search.trim().toLowerCase();
 
   if (!open) return null;
@@ -1252,6 +1260,9 @@ function IndicatorSidebar({
                   <Lock size={14} className="text-muted-foreground" />
                 )}
                 <span className="text-sm">{item.label}</span>
+                {isPlusBadge(item.id) && (
+                  <img src="/plus-logo.png" alt="Plus" className="h-4 w-[29px] shrink-0" />
+                )}
               </span>
               <span className="shrink-0 text-sm leading-none text-muted-foreground">›</span>
             </button>
@@ -1296,6 +1307,9 @@ function IndicatorSidebar({
                 >
                   <span className="flex items-center gap-1.5">
                     <span className="text-sm">{ind.name}</span>
+                    {isPlusBadge(ind.id) && (
+                      <img src="/plus-logo.png" alt="Plus" className="h-4 w-[29px] shrink-0" />
+                    )}
                     {ind.isNew && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-primary/10 text-primary font-semibold">
                         New
@@ -3758,14 +3772,20 @@ export function CustomScannerPage() {
               className="text-lg font-bold text-foreground bg-transparent border-0 outline-none p-0 m-0 min-w-0 w-auto max-w-xs placeholder:text-muted-foreground/50 focus:ring-0 focus:outline-none truncate"
               style={{ width: `${Math.max((query.name || DEFAULT_SCREENER_NAME).length, 12)}ch` }}
             />
-            <Pencil
-              size={13}
-              className="text-muted-foreground/40 shrink-0 group-hover:text-muted-foreground transition-colors cursor-pointer"
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 border-[#E1E1E1] text-[#777777] hover:text-[#262626] hover:bg-white shrink-0"
               onClick={(e) => {
                 const input = (e.currentTarget.parentElement?.querySelector("input") as HTMLInputElement | null);
                 input?.focus();
               }}
-            />
+              title="Edit screener name"
+              aria-label="Edit screener name"
+            >
+              <Pencil size={16} />
+            </Button>
             {hasUnsavedChanges && (
               <Badge variant="outline" className="text-[10px] font-medium border-amber-300 text-amber-800 bg-amber-50 shrink-0">
                 Unsaved changes
@@ -3776,20 +3796,6 @@ export function CustomScannerPage() {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 border-[#E1E1E1] text-[#777777] hover:text-[#262626] hover:bg-white"
-              onClick={() => {
-                const input = document.querySelector<HTMLInputElement>('[aria-label="Screener name"]');
-                input?.focus();
-              }}
-              title="Edit screener name"
-              aria-label="Edit screener name"
-            >
-              <Pencil size={16} />
-            </Button>
             <Button
               type="button"
               variant="outline"

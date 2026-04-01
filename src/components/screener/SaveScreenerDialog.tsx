@@ -14,15 +14,30 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { Loader2, Share2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ScreenerPreferences, ScreenerRunSchedule } from "@/types/screener";
+import type { ScreenerPreferences } from "@/types/screener";
 import { DEFAULT_SCREENER_PREFERENCES } from "@/types/screener";
 
-const RUN_SCHEDULE_OPTIONS: { value: ScreenerRunSchedule; label: string; hint: string }[] = [
-  { value: "manual", label: "Only when I open it", hint: "No automatic runs" },
-  { value: "daily_after_close", label: "Daily after market close", hint: "Typical for end-of-day screeners" },
-  { value: "daily_pre_market", label: "Daily before market open", hint: "See matches before the bell" },
-  { value: "weekly_sunday", label: "Weekly (Sunday)", hint: "Lightweight, weekly digest style" },
-];
+const RUN_DAY_OPTIONS = [
+  { id: "all-market-days", label: "All market days", hint: "Runs on every trading session" },
+  { id: "custom", label: "Specific weekdays", hint: "Choose exact days manually" },
+] as const;
+
+const RUN_TIMING_OPTIONS = [
+  { id: "every-1m", label: "Every 1 min" },
+  { id: "every-5m", label: "Every 5 mins" },
+  { id: "every-15m", label: "Every 15 mins" },
+  { id: "specific-time", label: "Specific time of day" },
+] as const;
+
+const WEEKDAY_OPTIONS = [
+  { id: "mon", label: "Mon" },
+  { id: "tue", label: "Tue" },
+  { id: "wed", label: "Wed" },
+  { id: "thu", label: "Thu" },
+  { id: "fri", label: "Fri" },
+  { id: "sat", label: "Sat" },
+  { id: "sun", label: "Sun" },
+] as const;
 
 export interface SaveScreenerDialogProps {
   open: boolean;
@@ -56,6 +71,10 @@ export function SaveScreenerDialog({
   const [prefs, setPrefs] = useState<ScreenerPreferences>(initialPreferences);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [runDaysMode, setRunDaysMode] = useState<(typeof RUN_DAY_OPTIONS)[number]["id"]>("all-market-days");
+  const [runTimingMode, setRunTimingMode] = useState<(typeof RUN_TIMING_OPTIONS)[number]["id"]>("every-5m");
+  const [specificTime, setSpecificTime] = useState("09:20");
+  const [customDays, setCustomDays] = useState<string[]>(["mon", "tue", "wed", "thu", "fri"]);
 
   useEffect(() => {
     if (!open) return;
@@ -63,6 +82,10 @@ export function SaveScreenerDialog({
     setName(initialName);
     setDescription(initialDescription);
     setPrefs({ ...DEFAULT_SCREENER_PREFERENCES, ...initialPreferences });
+    setRunDaysMode("all-market-days");
+    setRunTimingMode("every-5m");
+    setSpecificTime("09:20");
+    setCustomDays(["mon", "tue", "wed", "thu", "fri"]);
     setError(null);
     setSubmitting(false);
   }, [open, initialName, initialDescription, initialPreferences]);
@@ -88,8 +111,32 @@ export function SaveScreenerDialog({
     setStep("success");
   }
 
-  function toggleNotify(key: keyof Pick<ScreenerPreferences, "notifyEmail" | "notifyPush" | "notifyInApp">) {
-    setPrefs((p) => ({ ...p, [key]: !p[key] }));
+  function toggleCustomDay(dayId: string) {
+    setCustomDays((prev) =>
+      prev.includes(dayId) ? prev.filter((id) => id !== dayId) : [...prev, dayId]
+    );
+  }
+
+  function alertsScheduleSummary() {
+    const runDaysLabel =
+      runDaysMode === "all-market-days"
+        ? "All market days"
+        : customDays.length > 0
+          ? WEEKDAY_OPTIONS.filter((d) => customDays.includes(d.id))
+              .map((d) => d.label)
+              .join(", ")
+          : "No weekdays selected";
+
+    const timingLabel =
+      runTimingMode === "every-1m"
+        ? "Every 1 min"
+        : runTimingMode === "every-5m"
+          ? "Every 5 mins"
+          : runTimingMode === "every-15m"
+            ? "Every 15 mins"
+            : `At ${specificTime}`;
+
+    return `${runDaysLabel} • ${timingLabel}`;
   }
 
   return (
@@ -103,8 +150,8 @@ export function SaveScreenerDialog({
               </DialogTitle>
               <DialogDescription className="text-sm text-muted-foreground leading-relaxed">
                 {isFirstSave
-                  ? "Name it, choose how it runs, and turn on alerts. You can change this anytime."
-                  : "Update name, schedule, notifications, and visibility."}
+                  ? "Name it and set a scan run schedule. You can change this anytime."
+                  : "Update name, run schedule, and visibility."}
               </DialogDescription>
             </DialogHeader>
 
@@ -135,61 +182,99 @@ export function SaveScreenerDialog({
                 )}
               </div>
 
-              <Field label="Run schedule" contentClassName="p-2">
-                <div className="space-y-2">
-                  {RUN_SCHEDULE_OPTIONS.map((opt) => (
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold text-foreground">Scan Run Schedule</h3>
+                <p className="text-xs text-muted-foreground">Days on which this scanner should run</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {RUN_DAY_OPTIONS.map((option) => (
                     <label
-                      key={opt.value}
+                      key={option.id}
                       className={cn(
-                        "flex items-start gap-3 rounded-lg border p-2.5 cursor-pointer transition-colors",
-                        prefs.runSchedule === opt.value
-                          ? "border-primary/50 bg-primary/5"
-                          : "border-border/80 hover:bg-muted/40"
+                        "flex items-start gap-2 rounded-lg border p-2.5 cursor-pointer transition-colors min-h-[98px]",
+                        runDaysMode === option.id ? "border-primary/50 bg-primary/5" : "border-border/80 hover:bg-muted/40"
                       )}
                     >
                       <input
                         type="radio"
-                        name="runSchedule"
-                        checked={prefs.runSchedule === opt.value}
-                        onChange={() => setPrefs((p) => ({ ...p, runSchedule: opt.value }))}
+                        name="run-days"
+                        checked={runDaysMode === option.id}
+                        onChange={() => setRunDaysMode(option.id)}
                         className="mt-1 accent-primary"
                       />
                       <span className="min-w-0">
-                        <span className="text-sm font-medium text-foreground block">{opt.label}</span>
-                        <span className="text-xs text-muted-foreground">{opt.hint}</span>
+                        <span className="text-sm font-medium text-foreground block leading-5">{option.label}</span>
+                        <span className="text-xs text-muted-foreground leading-4">{option.hint}</span>
                       </span>
                     </label>
                   ))}
                 </div>
-              </Field>
+              </section>
 
-              <div className="space-y-2">
-                <span className="text-xs font-medium text-muted-foreground">Tell me when new stocks match</span>
-                <div className="rounded-lg border border-border/80 divide-y divide-border/60">
-                  {(
-                    [
-                      ["notifyInApp", "In-app", "Inside Upstox Scanners"] as const,
-                      ["notifyEmail", "Email", "Send to your registered email"] as const,
-                      ["notifyPush", "Push", "Mobile push when available"] as const,
-                    ] as const
-                  ).map(([key, title, sub]) => (
-                    <label
-                      key={key}
-                      className="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/30"
+              {runDaysMode === "custom" && (
+                <section className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Select weekdays</p>
+                  <div className="flex flex-wrap gap-2">
+                    {WEEKDAY_OPTIONS.map((day) => {
+                      const selected = customDays.includes(day.id);
+                      return (
+                        <button
+                          key={day.id}
+                          type="button"
+                          onClick={() => toggleCustomDay(day.id)}
+                          className={cn(
+                            "h-8 rounded-full border px-3 text-xs font-semibold transition-colors",
+                            selected
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-white text-foreground hover:border-primary/40"
+                          )}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold text-foreground">Timings</h3>
+                <p className="text-xs text-muted-foreground">How often this scanner should run</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                  {RUN_TIMING_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setRunTimingMode(option.id)}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-left text-sm transition-colors min-h-[44px]",
+                        runTimingMode === option.id
+                          ? "border-primary/50 bg-primary/5 text-foreground font-medium"
+                          : "border-border/80 text-muted-foreground hover:bg-muted/40"
+                      )}
                     >
-                      <span>
-                        <span className="text-sm font-medium text-foreground block">{title}</span>
-                        <span className="text-xs text-muted-foreground">{sub}</span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={prefs[key]}
-                        onChange={() => toggleNotify(key)}
-                        className="h-4 w-4 rounded border-input accent-primary"
-                      />
-                    </label>
+                      {option.label}
+                    </button>
                   ))}
                 </div>
+              </section>
+
+              {runTimingMode === "specific-time" && (
+                <section className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Run once daily at</p>
+                  <Input
+                    type="time"
+                    step={60}
+                    value={specificTime}
+                    onChange={(e) => setSpecificTime(e.target.value)}
+                    className="w-full sm:w-[220px]"
+                  />
+                </section>
+              )}
+
+              <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+                <p className="text-[11px] font-medium text-primary">Pricing for this schedule</p>
+                <p className="text-xs text-primary/90 mt-0.5">Rs 10/day</p>
+                <p className="text-[11px] text-primary/80 mt-1">{alertsScheduleSummary()}</p>
               </div>
 
               <Field label="Visibility" contentClassName="p-2">

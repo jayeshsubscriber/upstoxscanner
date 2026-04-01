@@ -10,8 +10,8 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { label: "Home", href: "/" },
   { label: "Create", href: "/diy" },
-  { label: "Explore", href: "/marketplace" },
-  { label: "My Screeners", href: "/scanners" },
+  { label: "Discover", href: "/marketplace" },
+  { label: "Alerts", href: "/alerts" },
 ];
 
 function isNavItemActive(pathname: string, href: string) {

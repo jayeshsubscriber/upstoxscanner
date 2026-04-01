@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -852,7 +852,11 @@ function LiveSignalCard({ signal }: { signal: LiveMarketSignal }) {
     .filter((metric): metric is { label: string; value: string } => Boolean(metric));
 
   return (
-    <div className="w-[360px] lg:w-full shrink-0 rounded-xl border border-[#F2F0E5] bg-white overflow-hidden flex flex-col snap-start" style={{ boxShadow: "0px 2px 0px #F2F0E5" }}>
+    <div
+      className="shrink-0 snap-start rounded-xl border border-[#F2F0E5] bg-white overflow-hidden flex flex-col w-[min(360px,calc(100vw-2.5rem))] sm:w-[max(220px,min(380px,calc((min(100vw,1536px)-5.5rem)/4)))]"
+      style={{ boxShadow: "0px 2px 0px #F2F0E5" }}
+      role="listitem"
+    >
       {/* HEADER: Stock + Price */}
       <div className="px-3.5 pt-3 pb-2.5">
         <div className="flex items-start justify-between gap-2">
@@ -1150,6 +1154,49 @@ function candlestickOutlook(row: CandlestickDetectionRow): string {
   return "Sellers are dominant; weakness can extend in the near term.";
 }
 
+type RelativeStrengthMode = "sector_rotation" | "outperform_nifty50" | "sector_top_gainers";
+type RelativeStrengthTimeframe = "1d" | "1w" | "1M";
+
+const RELATIVE_STRENGTH_TIMEFRAME_OPTIONS: Array<{ value: RelativeStrengthTimeframe; label: string }> = [
+  { value: "1d", label: "1D" },
+  { value: "1w", label: "1W" },
+  { value: "1M", label: "1Month" },
+];
+
+const RELATIVE_STRENGTH_MODE_OPTIONS: Array<{ value: RelativeStrengthMode; label: string }> = [
+  { value: "sector_rotation", label: "Sector Rotation Leaders" },
+  { value: "outperform_nifty50", label: "Stocks Outperforming Nifty 50" },
+  { value: "sector_top_gainers", label: "Sector-Wise Top Gainers" },
+];
+
+interface RelativeStrengthRow {
+  symbol: string;
+  sector: string;
+  indexUniverse: string;
+  returns: Record<RelativeStrengthTimeframe, number>;
+  sectorReturns: Record<RelativeStrengthTimeframe, number>;
+  niftyReturns: Record<RelativeStrengthTimeframe, number>;
+}
+
+const RELATIVE_STRENGTH_ROWS: RelativeStrengthRow[] = [
+  { symbol: "RELIANCE", sector: "Energy", indexUniverse: "Nifty 50", returns: { "1d": 2.1, "1w": 5.4, "1M": 9.8 }, sectorReturns: { "1d": 1.2, "1w": 3.1, "1M": 6.2 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "ONGC", sector: "Energy", indexUniverse: "Nifty 50", returns: { "1d": 1.4, "1w": 4.8, "1M": 8.1 }, sectorReturns: { "1d": 1.2, "1w": 3.1, "1M": 6.2 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "HDFCBANK", sector: "Banking", indexUniverse: "Nifty 50", returns: { "1d": 1.6, "1w": 3.2, "1M": 6.7 }, sectorReturns: { "1d": 1.0, "1w": 2.2, "1M": 4.4 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "ICICIBANK", sector: "Banking", indexUniverse: "Nifty 50", returns: { "1d": 2.0, "1w": 4.6, "1M": 8.8 }, sectorReturns: { "1d": 1.0, "1w": 2.2, "1M": 4.4 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "INFY", sector: "IT", indexUniverse: "Nifty 50", returns: { "1d": 1.1, "1w": 2.9, "1M": 7.4 }, sectorReturns: { "1d": 0.7, "1w": 1.8, "1M": 4.9 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "TCS", sector: "IT", indexUniverse: "Nifty 50", returns: { "1d": 0.9, "1w": 2.6, "1M": 6.2 }, sectorReturns: { "1d": 0.7, "1w": 1.8, "1M": 4.9 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "SUNPHARMA", sector: "Pharma", indexUniverse: "Nifty 50", returns: { "1d": 1.8, "1w": 4.1, "1M": 7.9 }, sectorReturns: { "1d": 1.1, "1w": 2.5, "1M": 5.3 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "DRREDDY", sector: "Pharma", indexUniverse: "Nifty 50", returns: { "1d": 1.5, "1w": 3.7, "1M": 7.0 }, sectorReturns: { "1d": 1.1, "1w": 2.5, "1M": 5.3 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "BHARTIARTL", sector: "Telecom", indexUniverse: "Nifty 100", returns: { "1d": 2.3, "1w": 5.7, "1M": 11.4 }, sectorReturns: { "1d": 1.3, "1w": 3.4, "1M": 6.8 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "IDEA", sector: "Telecom", indexUniverse: "Nifty 100", returns: { "1d": 3.1, "1w": 7.4, "1M": 14.2 }, sectorReturns: { "1d": 1.3, "1w": 3.4, "1M": 6.8 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "MARUTI", sector: "Auto", indexUniverse: "Nifty 100", returns: { "1d": 1.7, "1w": 4.0, "1M": 8.1 }, sectorReturns: { "1d": 1.0, "1w": 2.6, "1M": 5.0 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "TATAMOTORS", sector: "Auto", indexUniverse: "Nifty 100", returns: { "1d": 2.6, "1w": 6.2, "1M": 12.7 }, sectorReturns: { "1d": 1.0, "1w": 2.6, "1M": 5.0 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "LT", sector: "Capital Goods", indexUniverse: "Nifty 200", returns: { "1d": 1.9, "1w": 4.5, "1M": 9.2 }, sectorReturns: { "1d": 1.2, "1w": 3.0, "1M": 6.1 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "SIEMENS", sector: "Capital Goods", indexUniverse: "Nifty 200", returns: { "1d": 2.8, "1w": 6.8, "1M": 13.9 }, sectorReturns: { "1d": 1.2, "1w": 3.0, "1M": 6.1 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "ADANIENT", sector: "Infrastructure", indexUniverse: "Nifty 500", returns: { "1d": 2.9, "1w": 7.1, "1M": 15.4 }, sectorReturns: { "1d": 1.4, "1w": 3.8, "1M": 7.5 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+  { symbol: "RVNL", sector: "Infrastructure", indexUniverse: "Nifty 500", returns: { "1d": 3.4, "1w": 8.2, "1M": 16.9 }, sectorReturns: { "1d": 1.4, "1w": 3.8, "1M": 7.5 }, niftyReturns: { "1d": 0.8, "1w": 2.4, "1M": 5.6 } },
+];
+
 /** Fallback brand colors per symbol. */
 const STOCK_COLORS: Record<string, string> = {
   RELIANCE: "#3B82F6", HDFCBANK: "#1E40AF", INFY: "#0EA5E9", WIPRO: "#6366F1",
@@ -1244,54 +1291,85 @@ const SCANNER_TOP_SYMBOLS: Record<string, { symbols: string[]; total: number }> 
   "Open = Low (Bullish)":             { symbols: ["LT", "MARUTI", "BAJFINANCE", "ADANIENT"], total: 20 },
 };
 
+/** Fundamentals + technicals: larger subtext on small screens for readability; `sm+` stays compact. */
+const hubScanSubtextClassName =
+  "mt-1 text-sm sm:text-xs text-muted-foreground leading-snug line-clamp-2";
+
+const TECHNICAL_SCAN_RUN_LABELS = [
+  "15 mins ago",
+  "32 mins ago",
+  "1 hr ago",
+  "2 hrs ago",
+  "Yesterday",
+  "EOD",
+] as const;
+
+function technicalScanRunLabel(sectionTitle: string, rowIdx: number): string {
+  const seed = sectionTitle.length * 11 + rowIdx * 7;
+  return TECHNICAL_SCAN_RUN_LABELS[seed % TECHNICAL_SCAN_RUN_LABELS.length];
+}
+
+function plusOnlySeed(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 31 + input.charCodeAt(i)) % 1000003;
+  }
+  return hash;
+}
+
+function isPlusOnlyScan(sectionTitle: string, scanLabel: string): boolean {
+  // Keep ~30% rows as Plus-only using deterministic pseudo-random selection.
+  return plusOnlySeed(`${sectionTitle}::${scanLabel}`) % 10 < 3;
+}
+
 const TECHNICAL_SCREEN_SECTIONS: Array<{
   title: string;
   Icon: LucideIcon;
-  scans: Array<{ label: string; matchName: string }>;
+  scans: Array<{ label: string; matchName: string; subtext: string }>;
 }> = [
   {
     title: "Moving Average Signals",
     Icon: LineChart,
     scans: [
-      { label: "Golden Crossover", matchName: "Golden Crossover" },
-      { label: "Death Cross Alert", matchName: "Death Cross Alert" },
-      { label: "EMA Bullish Alignment", matchName: "Moving Average Bounce (50 EMA)" },
-      { label: "Moving Average Bounce", matchName: "Moving Average Bounce (50 EMA)" },
-      { label: "Price Reclaimed 200 DMA", matchName: "Golden Crossover" },
+      { label: "Golden Crossover", matchName: "Golden Crossover", subtext: "50/200 MA bull cross — trend bias flips up." },
+      { label: "Death Cross Alert", matchName: "Death Cross Alert", subtext: "50/200 MA bear cross — trend bias weakens." },
+      { label: "EMA Bullish Alignment", matchName: "Moving Average Bounce (50 EMA)", subtext: "Price stacked above short EMAs." },
+      { label: "Moving Average Bounce", matchName: "Moving Average Bounce (50 EMA)", subtext: "Pullback holds at key moving average." },
+      { label: "Price Reclaimed 200 DMA", matchName: "Golden Crossover", subtext: "Close back above the 200-day line." },
     ],
   },
   {
     title: "Breakout Scans",
     Icon: CandlestickChart,
     scans: [
-      { label: "52-Week High Breakout", matchName: "52-Week High Breakout" },
-      { label: "Stocks Near All-Time High", matchName: "Stocks Near All-Time High" },
-      { label: "Consolidation Breakout (BB Squeeze)", matchName: "Consolidation Breakout (BB Squeeze)" },
-      { label: "Darvas Box Breakout", matchName: "Darvas Box Breakout" },
-      { label: "Donchian Channel Breakout", matchName: "Consolidation Breakout (BB Squeeze)" },
-      { label: "NR7 Breakout", matchName: "NR7 Breakout" },
+      { label: "52-Week High Breakout", matchName: "52-Week High Breakout", subtext: "Fresh 52-week high with volume." },
+      { label: "Stocks Near All-Time High", matchName: "Stocks Near All-Time High", subtext: "Trading tight to lifetime highs." },
+      { label: "Consolidation Breakout (BB Squeeze)", matchName: "Consolidation Breakout (BB Squeeze)", subtext: "Squeeze resolves with expansion." },
+      { label: "Darvas Box Breakout", matchName: "Darvas Box Breakout", subtext: "Break above the box ceiling." },
+      { label: "Donchian Channel Breakout", matchName: "Consolidation Breakout (BB Squeeze)", subtext: "Upper Donchian channel break." },
+      { label: "NR7 Breakout", matchName: "NR7 Breakout", subtext: "Narrowest range in 7 sessions breaks." },
     ],
   },
   {
     title: "Mean Reversion Scans",
     Icon: LineChart,
     scans: [
-      { label: "RSI Oversold (Daily < 30)", matchName: "RSI Oversold (Daily < 30)" },
-      { label: "200 DMA Support Zone", matchName: "Moving Average Bounce (50 EMA)" },
-      { label: "Price Below Lower Bollinger Band", matchName: "Consolidation Breakout (BB Squeeze)" },
-      { label: "Bullish Divergence (RSI)", matchName: "Bullish Divergence (RSI)" },
-      { label: "Stochastic Oversold + Turning Up", matchName: "RSI Reversal Hunter" },
+      { label: "RSI Oversold (Daily < 30)", matchName: "RSI Oversold (Daily < 30)", subtext: "Daily RSI deep oversold zone." },
+      { label: "200 DMA Support Zone", matchName: "Moving Average Bounce (50 EMA)", subtext: "Long-term average acting as support." },
+      { label: "Price Below Lower Bollinger Band", matchName: "Consolidation Breakout (BB Squeeze)", subtext: "Close stretched under lower band." },
+      { label: "Bullish Divergence (RSI)", matchName: "Bullish Divergence (RSI)", subtext: "RSI disagrees with lower lows." },
+      { label: "Stochastic Oversold + Turning Up", matchName: "RSI Reversal Hunter", subtext: "Stoch turns up from oversold." },
     ],
   },
   {
     title: "Momentum Scans",
     Icon: Flame,
     scans: [
-      { label: "RSI Entering Overbought", matchName: "RSI Reversal Hunter" },
-      { label: "MACD Bullish Cross", matchName: "VWAP Cross Bullish (5-min)" },
-      { label: "Supertrend Flip (Bullish)", matchName: "Supertrend Flip (Bullish)" },
-      { label: "ADX Trending (Strong)", matchName: "First 15-min Volume Shocker" },
-      { label: "Aroon Bullish", matchName: "Sector Leader Rotation" },
+      { label: "RSI Entering Overbought", matchName: "RSI Reversal Hunter", subtext: "RSI pushing into overbought." },
+      { label: "MACD Bullish Cross", matchName: "VWAP Cross Bullish (5-min)", subtext: "MACD line crosses above signal." },
+      { label: "Supertrend Flip (Bullish)", matchName: "Supertrend Flip (Bullish)", subtext: "Indicator switches to buy mode." },
+      { label: "ADX Trending (Strong)", matchName: "First 15-min Volume Shocker", subtext: "Strong trend strength reading." },
+      { label: "Aroon Bullish", matchName: "Sector Leader Rotation", subtext: "Aroon Up leads — early strength." },
     ],
   },
 ];
@@ -1299,78 +1377,198 @@ const TECHNICAL_SCREEN_SECTIONS: Array<{
 const FUNDAMENTAL_SCREEN_SECTIONS: Array<{
   title: string;
   Icon: LucideIcon;
-  scans: Array<{ label: string; matchName: string }>;
+  scans: Array<{ label: string; matchName: string; subtext: string }>;
 }> = [
   {
     title: "Quality & Compounding",
     Icon: Target,
     scans: [
-      { label: "Coffee Can Portfolio", matchName: "Value + Growth Compounder" },
-      { label: "Consistent Compounders", matchName: "Value + Growth Compounder" },
-      { label: "Bluest of Blue Chips", matchName: "52-Week High Breakout" },
-      { label: "Piotroski Score = 9", matchName: "Piotroski Score > 7" },
-      { label: "Magic Formula", matchName: "Undervalued + Strong Fundamentals" },
+      {
+        label: "Coffee Can Portfolio",
+        matchName: "Value + Growth Compounder",
+        subtext: "Long-hold quality: durable ROE and cash.",
+      },
+      {
+        label: "Consistent Compounders",
+        matchName: "Value + Growth Compounder",
+        subtext: "Earnings compounding year on year.",
+      },
+      {
+        label: "Bluest of Blue Chips",
+        matchName: "52-Week High Breakout",
+        subtext: "Large-cap strength and liquidity.",
+      },
+      {
+        label: "Piotroski Score = 9",
+        matchName: "Piotroski Score > 7",
+        subtext: "Full F-Score fundamentals checklist.",
+      },
+      {
+        label: "Magic Formula",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "High earnings yield plus strong ROIC.",
+      },
     ],
   },
   {
     title: "Emerging Gems",
     Icon: BriefcaseBusiness,
     scans: [
-      { label: "Cash-Rich Small Caps", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "Fast-Growing Micro Caps", matchName: "Value + Growth Compounder" },
-      { label: "Multi-Bagger Candidates", matchName: "Sector Leader Rotation" },
-      { label: "Under-the-Radar Compounders", matchName: "Value + Growth Compounder" },
-      { label: "Small Cap Turnarounds", matchName: "Undervalued + Strong Fundamentals" },
+      {
+        label: "Cash-Rich Small Caps",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Small caps with surplus cash, low debt.",
+      },
+      {
+        label: "Fast-Growing Micro Caps",
+        matchName: "Value + Growth Compounder",
+        subtext: "Fast EPS growth in micro caps.",
+      },
+      {
+        label: "Multi-Bagger Candidates",
+        matchName: "Sector Leader Rotation",
+        subtext: "Improving growth plus momentum.",
+      },
+      {
+        label: "Under-the-Radar Compounders",
+        matchName: "Value + Growth Compounder",
+        subtext: "Quiet earners off the radar.",
+      },
+      {
+        label: "Small Cap Turnarounds",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Profit recovery in small caps.",
+      },
     ],
   },
   {
     title: "Value Screens",
     Icon: Landmark,
     scans: [
-      { label: "Low PE + High Growth", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "PEG Ratio < 1", matchName: "Value + Growth Compounder" },
-      { label: "Graham's Net-Net", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "High ROE Value Picks", matchName: "Piotroski Score > 7" },
-      { label: "Cash-Rich Value Leaders", matchName: "Dividend Aristocrats" },
+      {
+        label: "Low PE + High Growth",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Low multiple with solid EPS growth.",
+      },
+      {
+        label: "PEG Ratio < 1",
+        matchName: "Value + Growth Compounder",
+        subtext: "Cheap versus growth — GARP tilt.",
+      },
+      {
+        label: "Graham's Net-Net",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Below net current assets — deep value.",
+      },
+      {
+        label: "High ROE Value Picks",
+        matchName: "Piotroski Score > 7",
+        subtext: "Strong ROE at fair valuations.",
+      },
+      {
+        label: "Cash-Rich Value Leaders",
+        matchName: "Dividend Aristocrats",
+        subtext: "Yield plus cash-rich balance sheets.",
+      },
     ],
   },
   {
     title: "Dividend Screens",
     Icon: Bell,
     scans: [
-      { label: "Dividend Aristocrats (India)", matchName: "Dividend Aristocrats" },
-      { label: "High Dividend Yield", matchName: "Dividend Aristocrats" },
-      { label: "Dividend + Low Debt", matchName: "Dividend Aristocrats" },
+      {
+        label: "Dividend Aristocrats (India)",
+        matchName: "Dividend Aristocrats",
+        subtext: "Stable or rising payouts, quality filters.",
+      },
+      {
+        label: "High Dividend Yield",
+        matchName: "Dividend Aristocrats",
+        subtext: "Above-market yield, basic safety checks.",
+      },
+      {
+        label: "Dividend + Low Debt",
+        matchName: "Dividend Aristocrats",
+        subtext: "Income with conservative leverage.",
+      },
     ],
   },
   {
     title: "Turnaround & Special Situations",
     Icon: LineChart,
     scans: [
-      { label: "Loss to Profit Turnaround", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "Debt Reduction Champions", matchName: "Value + Growth Compounder" },
-      { label: "Capacity Expansion", matchName: "Sector Leader Rotation" },
+      {
+        label: "Loss to Profit Turnaround",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Back to sustainable profits and cash.",
+      },
+      {
+        label: "Debt Reduction Champions",
+        matchName: "Value + Growth Compounder",
+        subtext: "Active deleveraging, better equity story.",
+      },
+      {
+        label: "Capacity Expansion",
+        matchName: "Sector Leader Rotation",
+        subtext: "Capex that can lift future earnings.",
+      },
     ],
   },
   {
     title: "Shareholding & Ownership",
     Icon: BriefcaseBusiness,
     scans: [
-      { label: "FII Heavy Buying", matchName: "FII/DII Buying Surge" },
-      { label: "Promoter Buying", matchName: "FII/DII Buying Surge" },
-      { label: "Promoter Pledge Reduction", matchName: "Piotroski Score > 7" },
-      { label: "DII Accumulation", matchName: "FII/DII Buying Surge" },
-      { label: "High Promoter Holding + Low Debt", matchName: "Value + Growth Compounder" },
+      {
+        label: "FII Heavy Buying",
+        matchName: "FII/DII Buying Surge",
+        subtext: "Strong recent FII buying flows.",
+      },
+      {
+        label: "Promoter Buying",
+        matchName: "FII/DII Buying Surge",
+        subtext: "Insiders adding — aligned incentives.",
+      },
+      {
+        label: "Promoter Pledge Reduction",
+        matchName: "Piotroski Score > 7",
+        subtext: "Lower pledge, cleaner risk profile.",
+      },
+      {
+        label: "DII Accumulation",
+        matchName: "FII/DII Buying Surge",
+        subtext: "Domestic institutions building size.",
+      },
+      {
+        label: "High Promoter Holding + Low Debt",
+        matchName: "Value + Growth Compounder",
+        subtext: "High skin in the game, low leverage.",
+      },
     ],
   },
   {
     title: "Thematic",
     Icon: BriefcaseBusiness,
     scans: [
-      { label: "Profitable Small Caps", matchName: "Undervalued + Strong Fundamentals" },
-      { label: "PSU Gems", matchName: "Dividend Aristocrats" },
-      { label: "Defence & Railways", matchName: "Sector Leader Rotation" },
-      { label: "Green Energy / EV Plays", matchName: "Sector Leader Rotation" },
+      {
+        label: "Profitable Small Caps",
+        matchName: "Undervalued + Strong Fundamentals",
+        subtext: "Earnings-positive small caps.",
+      },
+      {
+        label: "PSU Gems",
+        matchName: "Dividend Aristocrats",
+        subtext: "PSU yield, reform, quality angles.",
+      },
+      {
+        label: "Defence & Railways",
+        matchName: "Sector Leader Rotation",
+        subtext: "Defence and rail capex themes.",
+      },
+      {
+        label: "Green Energy / EV Plays",
+        matchName: "Sector Leader Rotation",
+        subtext: "Renewables, EV chain, clean energy.",
+      },
     ],
   },
 ];
@@ -1380,6 +1578,13 @@ export function AppScannersHubMarketSections() {
   const [candlestickIndex, setCandlestickIndex] = useState<string>("Nifty 50");
   const [candlestickTimeframe, setCandlestickTimeframe] = useState<CandlestickTimeframe>("15m");
   const [candlestickFamily, setCandlestickFamily] = useState<CandlestickFamily>("bullish_reversal");
+  const [relativeStrengthIndex, setRelativeStrengthIndex] = useState<string>("Nifty 50");
+  const [relativeStrengthTimeframe, setRelativeStrengthTimeframe] = useState<RelativeStrengthTimeframe>("1d");
+  const [relativeStrengthMode, setRelativeStrengthMode] = useState<RelativeStrengthMode>("sector_rotation");
+  const [relativeStrengthSector, setRelativeStrengthSector] = useState<string>("All");
+  const [relativeStrengthIndexSheetOpen, setRelativeStrengthIndexSheetOpen] = useState(false);
+  const [relativeStrengthTimeframeSheetOpen, setRelativeStrengthTimeframeSheetOpen] = useState(false);
+  const [relativeStrengthSectorSheetOpen, setRelativeStrengthSectorSheetOpen] = useState(false);
   const [indexSheetOpen, setIndexSheetOpen] = useState(false);
   const [timeframeSheetOpen, setTimeframeSheetOpen] = useState(false);
 
@@ -1436,6 +1641,54 @@ export function AppScannersHubMarketSections() {
     });
   }, [candlestickFamily, candlestickIndex, candlestickTimeframe]);
 
+  const relativeStrengthSectors = useMemo(() => {
+    const sectors = new Set(
+      RELATIVE_STRENGTH_ROWS.filter((row) => row.indexUniverse === relativeStrengthIndex).map((row) => row.sector)
+    );
+    return ["All", ...Array.from(sectors)];
+  }, [relativeStrengthIndex]);
+
+  const relativeStrengthRows = useMemo(() => {
+    const rows = RELATIVE_STRENGTH_ROWS.filter((row) => row.indexUniverse === relativeStrengthIndex);
+    const tf = relativeStrengthTimeframe;
+
+    if (relativeStrengthMode === "sector_rotation") {
+      return [...rows]
+        .sort((a, b) => (b.returns[tf] - b.sectorReturns[tf]) - (a.returns[tf] - a.sectorReturns[tf]))
+        .slice(0, 6);
+    }
+
+    if (relativeStrengthMode === "outperform_nifty50") {
+      return [...rows]
+        .sort((a, b) => (b.returns[tf] - b.niftyReturns[tf]) - (a.returns[tf] - a.niftyReturns[tf]))
+        .slice(0, 6);
+    }
+
+    if (relativeStrengthSector === "All") {
+      const bySector = new Map<string, RelativeStrengthRow>();
+      rows.forEach((row) => {
+        const current = bySector.get(row.sector);
+        if (!current || row.returns[tf] > current.returns[tf]) {
+          bySector.set(row.sector, row);
+        }
+      });
+      return Array.from(bySector.values())
+        .sort((a, b) => b.returns[tf] - a.returns[tf])
+        .slice(0, 8);
+    }
+
+    return rows
+      .filter((row) => row.sector === relativeStrengthSector)
+      .sort((a, b) => b.returns[tf] - a.returns[tf])
+      .slice(0, 5);
+  }, [relativeStrengthIndex, relativeStrengthMode, relativeStrengthSector, relativeStrengthTimeframe]);
+
+  useEffect(() => {
+    if (!relativeStrengthSectors.includes(relativeStrengthSector)) {
+      setRelativeStrengthSector("All");
+    }
+  }, [relativeStrengthSector, relativeStrengthSectors]);
+
   return (
     <>
         {/* Live market signals */}
@@ -1484,7 +1737,10 @@ export function AppScannersHubMarketSections() {
                 No signals match these filters. Try a different signal type or time horizon.
               </p>
             ) : (
-              <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-0 snap-x snap-mandatory scrollbar-none lg:mr-0 lg:pr-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:snap-none">
+              <div
+                className="flex flex-nowrap gap-3 overflow-x-auto overscroll-x-contain pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none sm:pr-6 lg:mr-0 lg:pr-0 touch-pan-x"
+                role="list"
+              >
                 {liveSignalsFiltered.map((signal) => (
                   <LiveSignalCard key={signal.id} signal={signal} />
                 ))}
@@ -1496,17 +1752,24 @@ export function AppScannersHubMarketSections() {
         <section className="mb-6 lg:mb-8" aria-label="Fundamental screens">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xl leading-7 font-bold text-foreground">Fundamental Screens</h2>
-            <Link to="/scanners" className="text-xs font-medium text-primary">
+            <Link
+              to="/scanners"
+              className="text-xs font-medium text-foreground underline-offset-4 hover:underline"
+            >
               View all
             </Link>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none lg:mr-0 lg:pr-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:snap-none">
+          <div
+            className="flex flex-nowrap gap-3 overflow-x-auto overscroll-x-contain pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none sm:pr-6 lg:mr-0 lg:pr-0 touch-pan-x"
+            role="list"
+          >
             {fundamentalScreenSections.map((section) => (
               <div
                 key={section.title}
-                className="w-[90%] min-w-[320px] max-w-[360px] lg:w-full lg:min-w-0 lg:max-w-none shrink-0 snap-start rounded-2xl border border-border/60 bg-white overflow-hidden"
+                className="shrink-0 snap-start rounded-2xl border border-neutral-200/90 bg-white overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)] w-[min(360px,calc(100vw-2.5rem))] sm:w-[max(220px,min(380px,calc((min(100vw,1536px)-5.5rem)/4)))]"
+                role="listitem"
               >
-                <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
+                <div className="px-4 py-3 border-b border-border/70 flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
                     <section.Icon className="w-5 h-5 text-foreground shrink-0" />
                     <h3 className="text-[15px] leading-5 font-semibold text-foreground truncate">{section.title}</h3>
@@ -1518,12 +1781,33 @@ export function AppScannersHubMarketSections() {
                       key={`${section.title}-${item.label}`}
                       to={`/scanners/${item.scanner.id}`}
                       className={cn(
-                        "flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/30 transition-colors",
-                        idx !== section.scans.length - 1 && "border-b border-border/50"
+                        "block px-4 py-3.5 sm:py-4 hover:bg-muted/30 transition-colors",
+                        idx !== section.scans.length - 1 && "border-b border-border/60"
                       )}
                     >
-                      <span className="text-[14px] leading-5 font-medium text-foreground">{item.label}</span>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground/70 shrink-0" />
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-[14px] leading-5 font-semibold text-foreground pr-1">
+                            <span className="inline-flex items-center gap-1.5">
+                              <span>{item.label}</span>
+                              {isPlusOnlyScan(section.title, item.label) && (
+                                <img
+                                  src="/plus-logo.png"
+                                  alt="Plus"
+                                  className="h-4 w-[29px] shrink-0"
+                                />
+                              )}
+                            </span>
+                          </h4>
+                          <p className={hubScanSubtextClassName}>{item.subtext}</p>
+                          <div className="mt-2 flex items-center">
+                            <span className="text-xs sm:text-[11px] font-medium text-muted-foreground tabular-nums">
+                              {item.scanner.resultCount} stocks
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground/70 shrink-0 mt-0.5" aria-hidden />
+                      </div>
                     </Link>
                   ))}
                 </div>
@@ -1535,18 +1819,25 @@ export function AppScannersHubMarketSections() {
         <section className="mb-6 lg:mb-8" aria-label="Technical screens">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xl leading-7 font-bold text-foreground">Technical Screens</h2>
-            <Link to="/scanners" className="text-xs font-medium text-primary">
+            <Link
+              to="/scanners"
+              className="text-xs font-medium text-foreground underline-offset-4 hover:underline"
+            >
               View all
             </Link>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none lg:mr-0 lg:pr-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:snap-none">
+          <div
+            className="flex flex-nowrap gap-3 overflow-x-auto overscroll-x-contain pb-2 -mr-4 pr-4 snap-x snap-mandatory scrollbar-none sm:pr-6 lg:mr-0 lg:pr-0 touch-pan-x"
+            role="list"
+          >
             {technicalScreenSections.map((section) => (
                 <div
                   key={section.title}
-                  className="w-[90%] min-w-[320px] max-w-[360px] lg:w-full lg:min-w-0 lg:max-w-none shrink-0 snap-start rounded-2xl border border-border/60 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden"
+                  className="shrink-0 snap-start rounded-2xl border border-neutral-200/90 bg-white overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04)] w-[min(360px,calc(100vw-2.5rem))] sm:w-[max(220px,min(380px,calc((min(100vw,1536px)-5.5rem)/4)))]"
+                  role="listitem"
                 >
                   {/* Section header */}
-                  <div className="flex items-center px-4 py-3.5 border-b border-border/50">
+                  <div className="flex items-center px-4 py-3.5 border-b border-border/70">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <section.Icon className="w-5 h-5 text-foreground shrink-0" />
                       <h3 className="text-[15px] leading-5 font-semibold text-foreground truncate">
@@ -1560,35 +1851,46 @@ export function AppScannersHubMarketSections() {
                     {section.scans.map((item, rowIdx) => {
                       const isLast = rowIdx === section.scans.length - 1;
                       const stockData = SCANNER_TOP_SYMBOLS[item.scanner.name];
+                      const runLabel = technicalScanRunLabel(section.title, rowIdx);
                       return (
                         <Link
                           key={`${section.title}-${item.label}-${item.scanner.id}`}
                           to={`/scanners/${item.scanner.id}`}
                           className={cn(
                             "block px-4 py-4 hover:bg-muted/30 transition-colors",
-                            !isLast && "border-b border-border/50"
+                            !isLast && "border-b border-border/60"
                           )}
                         >
-                          <div className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1">
-                              <h4 className="text-[14px] leading-5 font-semibold text-foreground truncate pr-1">
-                                {item.label}
+                          <div className="relative">
+                            <div className="min-w-0">
+                              <h4 className="text-[14px] leading-5 font-semibold text-foreground truncate pr-5">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className="truncate">{item.label}</span>
+                                  {isPlusOnlyScan(section.title, item.label) && (
+                                    <img
+                                      src="/plus-logo.png"
+                                      alt="Plus"
+                                      className="h-4 w-[29px] shrink-0"
+                                    />
+                                  )}
+                                </span>
                               </h4>
+                              <p className={hubScanSubtextClassName}>{item.subtext}</p>
 
                               {/* Stock logos + last updated */}
-                              <div className="flex items-center justify-between mt-2.5">
+                              <div className="mt-2 grid grid-cols-[1fr_auto] items-center gap-2">
                                 {stockData ? (
                                   <StockLogoRow symbols={stockData.symbols} total={stockData.total} />
                                 ) : (
                                   <span />
                                 )}
-                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground/70 shrink-0">
-                                  <Clock className="h-2.5 w-2.5" />
-                                  {item.scanner.lastUpdated}
+                                <span className="inline-flex h-4 min-w-[74px] items-center justify-end gap-1 text-[10px] leading-none text-muted-foreground/70 whitespace-nowrap justify-self-end text-right">
+                                  <Clock className="h-2.5 w-2.5 shrink-0" />
+                                  {runLabel}
                                 </span>
                               </div>
                             </div>
-                            <ChevronRight className="w-4 h-4 text-muted-foreground/70 shrink-0 mt-0.5" />
+                            <ChevronRight className="w-4 h-4 text-muted-foreground/70 absolute right-0 top-0.5" />
                           </div>
                         </Link>
                       );
@@ -1641,84 +1943,236 @@ export function AppScannersHubMarketSections() {
           </div>
         </section>
 
-        <section className="mb-6 lg:mb-8" aria-label="Candlesticks scan">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl leading-7 font-bold text-foreground">Candlesticks Scan</h2>
-          </div>
+        <section className="mb-6 lg:mb-8" aria-label="Candlesticks and relative strength scans">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xl leading-7 font-bold text-foreground">Candlesticks Scan</h2>
+              </div>
 
-          <div className="p-0">
-            <div className="mb-4">
-              <div className="flex h-11 items-center gap-3 overflow-x-auto whitespace-nowrap">
-                <button
-                  type="button"
-                  onClick={() => setIndexSheetOpen(true)}
-                  className={cn(
-                    "shrink-0 box-border inline-flex w-auto max-w-none items-center gap-[2px] h-[28px] rounded-[6px] border transition-colors",
-                    "pl-[10px] pr-[6px] py-[6px]",
-                    indexSheetOpen ? "bg-muted/60 border-foreground/25" : "bg-[#FFFFFF] border-[#E1E1E1]"
+              <div className="p-0">
+                <div className="mb-4">
+                  <div className="flex h-11 items-center gap-3 overflow-x-auto whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => setIndexSheetOpen(true)}
+                      className={cn(
+                        "shrink-0 box-border inline-flex w-auto max-w-none items-center gap-[2px] h-[28px] rounded-[6px] border transition-colors",
+                        "pl-[10px] pr-[6px] py-[6px]",
+                        indexSheetOpen ? "bg-muted/60 border-foreground/25" : "bg-[#FFFFFF] border-[#E1E1E1]"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "h-[16px] text-[12px] font-semibold leading-[16px] flex items-center whitespace-nowrap",
+                          indexSheetOpen ? "text-foreground" : "text-[#262626]"
+                        )}
+                      >
+                        {candlestickIndex}
+                      </span>
+                      <span className="flex h-[16px] w-[16px] items-center justify-center" aria-hidden="true">
+                        <span
+                          className="h-0 w-0"
+                          style={{
+                            borderLeft: "5px solid transparent",
+                            borderRight: "5px solid transparent",
+                            borderTop: `7px solid ${indexSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
+                          }}
+                        />
+                      </span>
+                    </button>
+                    <span className="h-7 w-px shrink-0 bg-[#F1F1F1]" aria-hidden />
+                    <button
+                      type="button"
+                      onClick={() => setTimeframeSheetOpen(true)}
+                      className={cn(
+                        "shrink-0 box-border inline-flex w-auto max-w-none items-center gap-[2px] h-[28px] rounded-[6px] border transition-colors",
+                        "pl-[10px] pr-[6px] py-[6px]",
+                        timeframeSheetOpen ? "bg-muted/60 border-foreground/25" : "bg-[#FFFFFF] border-[#E1E1E1]"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "h-[16px] text-[12px] font-semibold leading-[16px] flex items-center whitespace-nowrap",
+                          timeframeSheetOpen ? "text-foreground" : "text-[#262626]"
+                        )}
+                      >
+                        {CANDLESTICK_TIMEFRAME_OPTIONS.find((opt) => opt.value === candlestickTimeframe)?.label ?? "Timeframe"}
+                      </span>
+                      <span className="flex h-[16px] w-[16px] items-center justify-center" aria-hidden="true">
+                        <span
+                          className="h-0 w-0"
+                          style={{
+                            borderLeft: "5px solid transparent",
+                            borderRight: "5px solid transparent",
+                            borderTop: `7px solid ${timeframeSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
+                          }}
+                        />
+                      </span>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      {CANDLESTICK_FAMILY_OPTIONS.map((opt) => {
+                        const active = candlestickFamily === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setCandlestickFamily(opt.value)}
+                            className={cn(
+                              "inline-flex h-7 items-center justify-center rounded-md border px-3 text-xs font-semibold",
+                              active
+                                ? "border-foreground/30 bg-muted text-foreground"
+                                : "border-[#E1E1E1] bg-white text-[#262626]"
+                            )}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="flex items-center border-b border-border/60 px-3 py-2.5 bg-muted/20">
+                    <div className="w-[120px] shrink-0 text-[10px] font-medium text-muted-foreground">Scrip</div>
+                    <div className="flex-1 text-[10px] font-medium text-muted-foreground">SparkCandle</div>
+                    <div className="w-[150px] shrink-0 text-right text-[10px] font-medium text-muted-foreground">Price</div>
+                  </div>
+                  {candlestickRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-3">
+                      No candlestick detections for selected filters.
+                    </p>
+                  ) : (
+                    candlestickRows.map((row, idx) => {
+                      const up = row.changePct >= 0;
+                      const toneTagClass = up
+                        ? "bg-[linear-gradient(90deg,#DEF5ED_24%,rgba(114,216,181,0)_100%)] text-[#008858]"
+                        : "bg-[linear-gradient(90deg,#FCE7E7_24%,rgba(239,68,68,0)_100%)] text-[#B91C1C]";
+                      const ToneIcon = up ? TrendingUp : TrendingDown;
+                      return (
+                        <div
+                          key={`${row.symbol}-${row.detectedPattern}-${row.timeframe}`}
+                          className={cn("px-3 py-3", idx !== candlestickRows.length - 1 && "border-b border-border/50")}
+                        >
+                          <div className="grid grid-cols-[120px_1fr_150px] items-start gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[14px] font-semibold text-foreground leading-5">{row.symbol}</p>
+                            </div>
+
+                            <div className="min-w-0">
+                              <img
+                                src={candlestickPatternImage(row.family)}
+                                alt={`${row.detectedPattern} pattern preview`}
+                                className="h-14 w-24 object-cover"
+                                loading="lazy"
+                              />
+                              <p className="mt-1.5 text-[12px] font-medium text-foreground leading-4 whitespace-nowrap">{row.detectedPattern}</p>
+                            </div>
+
+                            <div className="min-w-0 text-right">
+                              <p className="text-[14px] font-semibold text-foreground">{formatInr(row.ltp)}</p>
+                              <p className={cn("text-[12px] mt-0.5", up ? "text-[#008858]" : "text-[#D53627]")}>
+                                {up ? "+" : ""}{row.changeAbs.toFixed(2)} ({up ? "+" : ""}{row.changePct.toFixed(2)}%)
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-2 flex h-6 items-center rounded-[4px] bg-muted/40 px-2 py-1">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[10px] font-medium leading-4 text-[#262626]">
+                                {candlestickOutlook(row)}
+                              </p>
+                            </div>
+                            <div className="ml-1 inline-flex h-4 items-center justify-center rounded-[4px] px-1">
+                              <span className={cn("inline-flex items-center gap-0.5 rounded-[4px] px-1 py-0 text-[10px] font-semibold leading-4", toneTagClass)}>
+                                {up ? "Bullish" : "Bearish"}
+                                <ToneIcon className="h-3 w-3" aria-hidden />
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
-                >
-                  <span
-                    className={cn(
-                      "h-[16px] text-[12px] font-semibold leading-[16px] flex items-center whitespace-nowrap",
-                      indexSheetOpen ? "text-foreground" : "text-[#262626]"
-                    )}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xl leading-7 font-bold text-foreground">Sector &amp; Relative Strength Leaders</h2>
+              </div>
+
+              <div className="mb-4">
+                <div className="flex h-11 items-center gap-3 overflow-x-auto whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={() => setRelativeStrengthIndexSheetOpen(true)}
+                    className="h-[28px] rounded-[6px] border border-[#E1E1E1] bg-white px-[10px] text-[12px] font-semibold text-[#262626]"
                   >
-                    {candlestickIndex}
-                  </span>
-                  <span className="flex h-[16px] w-[16px] items-center justify-center" aria-hidden="true">
-                    <span
-                      className="h-0 w-0"
-                      style={{
-                        borderLeft: "5px solid transparent",
-                        borderRight: "5px solid transparent",
-                        borderTop: `7px solid ${indexSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
-                      }}
-                    />
-                  </span>
-                </button>
-                <span className="h-7 w-px shrink-0 bg-[#F1F1F1]" aria-hidden />
-                <button
-                  type="button"
-                  onClick={() => setTimeframeSheetOpen(true)}
-                  className={cn(
-                    "shrink-0 box-border inline-flex w-auto max-w-none items-center gap-[2px] h-[28px] rounded-[6px] border transition-colors",
-                    "pl-[10px] pr-[6px] py-[6px]",
-                    timeframeSheetOpen ? "bg-muted/60 border-foreground/25" : "bg-[#FFFFFF] border-[#E1E1E1]"
+                    <span className="inline-flex items-center gap-1">
+                      {relativeStrengthIndex}
+                      <span
+                        className="h-0 w-0"
+                        style={{
+                          borderLeft: "4px solid transparent",
+                          borderRight: "4px solid transparent",
+                          borderTop: `6px solid ${relativeStrengthIndexSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
+                        }}
+                      />
+                    </span>
+                  </button>
+
+                  <span className="h-7 w-px shrink-0 bg-[#F1F1F1]" aria-hidden />
+
+                  <button
+                    type="button"
+                    onClick={() => setRelativeStrengthTimeframeSheetOpen(true)}
+                    className="h-[28px] rounded-[6px] border border-[#E1E1E1] bg-white px-[10px] text-[12px] font-semibold text-[#262626]"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {RELATIVE_STRENGTH_TIMEFRAME_OPTIONS.find((opt) => opt.value === relativeStrengthTimeframe)?.label ?? "Timeframe"}
+                      <span
+                        className="h-0 w-0"
+                        style={{
+                          borderLeft: "4px solid transparent",
+                          borderRight: "4px solid transparent",
+                          borderTop: `6px solid ${relativeStrengthTimeframeSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
+                        }}
+                      />
+                    </span>
+                  </button>
+
+                  {relativeStrengthMode === "sector_top_gainers" && (
+                    <button
+                      type="button"
+                      onClick={() => setRelativeStrengthSectorSheetOpen(true)}
+                      className="h-[28px] rounded-[6px] border border-[#E1E1E1] bg-white px-[10px] text-[12px] font-semibold text-[#262626]"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {relativeStrengthSector}
+                        <span
+                          className="h-0 w-0"
+                          style={{
+                            borderLeft: "4px solid transparent",
+                            borderRight: "4px solid transparent",
+                            borderTop: `6px solid ${relativeStrengthSectorSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
+                          }}
+                        />
+                      </span>
+                    </button>
                   )}
-                >
-                  <span
-                    className={cn(
-                      "h-[16px] text-[12px] font-semibold leading-[16px] flex items-center whitespace-nowrap",
-                      timeframeSheetOpen ? "text-foreground" : "text-[#262626]"
-                    )}
-                  >
-                    {CANDLESTICK_TIMEFRAME_OPTIONS.find((opt) => opt.value === candlestickTimeframe)?.label ?? "Timeframe"}
-                  </span>
-                  <span className="flex h-[16px] w-[16px] items-center justify-center" aria-hidden="true">
-                    <span
-                      className="h-0 w-0"
-                      style={{
-                        borderLeft: "5px solid transparent",
-                        borderRight: "5px solid transparent",
-                        borderTop: `7px solid ${timeframeSheetOpen ? "hsl(var(--foreground))" : "#262626"}`,
-                      }}
-                    />
-                  </span>
-                </button>
-                <div className="flex items-center gap-2">
-                  {CANDLESTICK_FAMILY_OPTIONS.map((opt) => {
-                    const active = candlestickFamily === opt.value;
+                  {RELATIVE_STRENGTH_MODE_OPTIONS.map((opt) => {
+                    const active = relativeStrengthMode === opt.value;
                     return (
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => setCandlestickFamily(opt.value)}
+                        onClick={() => setRelativeStrengthMode(opt.value)}
                         className={cn(
-                          "inline-flex h-7 items-center justify-center rounded-md border px-3 text-xs font-semibold",
-                          active
-                            ? "border-foreground/30 bg-muted text-foreground"
-                            : "border-[#E1E1E1] bg-white text-[#262626]"
+                          "inline-flex h-7 items-center justify-center rounded-md border px-3 text-xs font-semibold whitespace-nowrap",
+                          active ? "border-foreground/30 bg-muted text-foreground" : "border-[#E1E1E1] bg-white text-[#262626]"
                         )}
                       >
                         {opt.label}
@@ -1727,70 +2181,53 @@ export function AppScannersHubMarketSections() {
                   })}
                 </div>
               </div>
-            </div>
 
-            <div className="mt-3">
-              <div className="flex items-center border-b border-border/60 px-3 py-2.5 bg-muted/20">
-                <div className="w-[120px] shrink-0 text-[10px] font-medium text-muted-foreground">Scrip</div>
-                <div className="flex-1 text-[10px] font-medium text-muted-foreground">SparkCandle</div>
-                <div className="w-[150px] shrink-0 text-right text-[10px] font-medium text-muted-foreground">Price</div>
-              </div>
-              {candlestickRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-3">
-                  No candlestick detections for selected filters.
-                </p>
-              ) : (
-                candlestickRows.map((row, idx) => {
-                  const up = row.changePct >= 0;
-                  const toneTagClass = up
-                    ? "bg-[linear-gradient(90deg,#DEF5ED_24%,rgba(114,216,181,0)_100%)] text-[#008858]"
-                    : "bg-[linear-gradient(90deg,#FCE7E7_24%,rgba(239,68,68,0)_100%)] text-[#B91C1C]";
-                  const ToneIcon = up ? TrendingUp : TrendingDown;
+              <div className="mt-3">
+                <div className="flex items-center border-b border-border/60 px-3 py-2.5 bg-muted/20">
+                  <div className="w-[140px] shrink-0 text-[10px] font-medium text-muted-foreground">Scrip</div>
+                  <div className="flex-1 text-right text-[10px] font-medium text-muted-foreground">Returns ({RELATIVE_STRENGTH_TIMEFRAME_OPTIONS.find((o) => o.value === relativeStrengthTimeframe)?.label})</div>
+                  <div className="w-[150px] shrink-0 text-right text-[10px] font-medium text-muted-foreground">
+                    {relativeStrengthMode === "sector_rotation"
+                      ? `Sector Returns (${RELATIVE_STRENGTH_TIMEFRAME_OPTIONS.find((o) => o.value === relativeStrengthTimeframe)?.label})`
+                      : relativeStrengthMode === "outperform_nifty50"
+                        ? `Nifty 50 (${RELATIVE_STRENGTH_TIMEFRAME_OPTIONS.find((o) => o.value === relativeStrengthTimeframe)?.label})`
+                        : "Sector"}
+                  </div>
+                </div>
+
+                {relativeStrengthRows.map((row, idx) => {
+                  const stockVal = row.returns[relativeStrengthTimeframe];
+                  const stockUp = stockVal >= 0;
+                  const refVal =
+                    relativeStrengthMode === "sector_rotation"
+                      ? row.sectorReturns[relativeStrengthTimeframe]
+                      : row.niftyReturns[relativeStrengthTimeframe];
+                  const refUp = refVal >= 0;
                   return (
-                    <div
-                      key={`${row.symbol}-${row.detectedPattern}-${row.timeframe}`}
-                      className={cn("px-3 py-3", idx !== candlestickRows.length - 1 && "border-b border-border/50")}
-                    >
-                      <div className="grid grid-cols-[120px_1fr_150px] items-start gap-3">
+                    <div key={`${row.symbol}-${row.sector}-${relativeStrengthMode}`} className={cn("px-3 py-3", idx !== relativeStrengthRows.length - 1 && "border-b border-border/50")}>
+                      <div className="grid grid-cols-[140px_1fr_150px] items-center gap-3">
                         <div className="min-w-0">
                           <p className="text-[14px] font-semibold text-foreground leading-5">{row.symbol}</p>
                         </div>
-
-                        <div className="min-w-0">
-                          <img
-                            src={candlestickPatternImage(row.family)}
-                            alt={`${row.detectedPattern} pattern preview`}
-                            className="h-14 w-24 object-cover"
-                            loading="lazy"
-                          />
-                          <p className="mt-1.5 text-[12px] font-medium text-foreground leading-4 whitespace-nowrap">{row.detectedPattern}</p>
-                        </div>
-
-                        <div className="min-w-0 text-right">
-                          <p className="text-[14px] font-semibold text-foreground">{formatInr(row.ltp)}</p>
-                          <p className={cn("text-[12px] mt-0.5", up ? "text-[#008858]" : "text-[#D53627]")}>
-                            {up ? "+" : ""}{row.changeAbs.toFixed(2)} ({up ? "+" : ""}{row.changePct.toFixed(2)}%)
+                        <div className="text-right">
+                          <p className={cn("text-[13px] font-semibold", stockUp ? "text-[#008858]" : "text-[#D53627]")}>
+                            {stockUp ? "+" : ""}{stockVal.toFixed(2)}%
                           </p>
                         </div>
-                      </div>
-
-                      <div className="mt-2 flex h-6 items-center rounded-[4px] bg-muted/40 px-2 py-1">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[10px] font-medium leading-4 text-[#262626]">
-                            {candlestickOutlook(row)}
-                          </p>
-                        </div>
-                        <div className="ml-1 inline-flex h-4 items-center justify-center rounded-[4px] px-1">
-                          <span className={cn("inline-flex items-center gap-0.5 rounded-[4px] px-1 py-0 text-[10px] font-semibold leading-4", toneTagClass)}>
-                            {up ? "Bullish" : "Bearish"}
-                            <ToneIcon className="h-3 w-3" aria-hidden />
-                          </span>
+                        <div className="text-right">
+                          {relativeStrengthMode === "sector_top_gainers" ? (
+                            <p className="text-[12px] text-muted-foreground">{row.sector}</p>
+                          ) : (
+                            <p className={cn("text-[12px] font-medium", refUp ? "text-[#008858]" : "text-[#D53627]")}>
+                              {refUp ? "+" : ""}{refVal.toFixed(2)}%
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
                   );
-                })
-              )}
+                })}
+              </div>
             </div>
           </div>
 
@@ -1858,6 +2295,99 @@ export function AppScannersHubMarketSections() {
                           {active ? <span className="h-2 w-2 rounded-full bg-foreground" /> : null}
                         </span>
                         <span className="text-xs font-semibold text-[#262626]">{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={relativeStrengthIndexSheetOpen} onOpenChange={setRelativeStrengthIndexSheetOpen}>
+            <DialogContent className="!p-0 !gap-0 !border-0 !shadow-none !rounded-t-2xl !rounded-b-none !bg-white w-full max-w-none h-auto max-h-[calc(100vh-20px)] overflow-hidden !left-0 !top-auto !bottom-0 !translate-x-0 !translate-y-0 sm:rounded-t-2xl [&>button]:hidden">
+              <div className="flex flex-col bg-white">
+                <div className="border-b border-[#F1F1F1] px-4 py-4">
+                  <DialogTitle className="text-[14px] font-medium leading-6 text-[#262626]">Filter by</DialogTitle>
+                </div>
+                <div className="px-4 py-3 space-y-4">
+                  {CANDLESTICK_INDEX_OPTIONS.map((opt) => {
+                    const active = relativeStrengthIndex === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          setRelativeStrengthIndex(opt);
+                          setRelativeStrengthIndexSheetOpen(false);
+                        }}
+                        className="flex items-center gap-2 text-left"
+                      >
+                        <span className={cn("inline-flex h-4 w-4 items-center justify-center rounded-full border-[1.5px]", active ? "border-foreground" : "border-[#919191]")}>
+                          {active ? <span className="h-2 w-2 rounded-full bg-foreground" /> : null}
+                        </span>
+                        <span className="text-xs font-semibold text-[#262626]">{opt}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={relativeStrengthTimeframeSheetOpen} onOpenChange={setRelativeStrengthTimeframeSheetOpen}>
+            <DialogContent className="!p-0 !gap-0 !border-0 !shadow-none !rounded-t-2xl !rounded-b-none !bg-white w-full max-w-none h-auto max-h-[calc(100vh-20px)] overflow-hidden !left-0 !top-auto !bottom-0 !translate-x-0 !translate-y-0 sm:rounded-t-2xl [&>button]:hidden">
+              <div className="flex flex-col bg-white">
+                <div className="border-b border-[#F1F1F1] px-4 py-4">
+                  <DialogTitle className="text-[14px] font-medium leading-6 text-[#262626]">Timeframe</DialogTitle>
+                </div>
+                <div className="px-4 py-3 space-y-4">
+                  {RELATIVE_STRENGTH_TIMEFRAME_OPTIONS.map((opt) => {
+                    const active = relativeStrengthTimeframe === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setRelativeStrengthTimeframe(opt.value);
+                          setRelativeStrengthTimeframeSheetOpen(false);
+                        }}
+                        className="flex items-center gap-2 text-left"
+                      >
+                        <span className={cn("inline-flex h-4 w-4 items-center justify-center rounded-full border-[1.5px]", active ? "border-foreground" : "border-[#919191]")}>
+                          {active ? <span className="h-2 w-2 rounded-full bg-foreground" /> : null}
+                        </span>
+                        <span className="text-xs font-semibold text-[#262626]">{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={relativeStrengthSectorSheetOpen} onOpenChange={setRelativeStrengthSectorSheetOpen}>
+            <DialogContent className="!p-0 !gap-0 !border-0 !shadow-none !rounded-t-2xl !rounded-b-none !bg-white w-full max-w-none h-auto max-h-[calc(100vh-20px)] overflow-hidden !left-0 !top-auto !bottom-0 !translate-x-0 !translate-y-0 sm:rounded-t-2xl [&>button]:hidden">
+              <div className="flex flex-col bg-white">
+                <div className="border-b border-[#F1F1F1] px-4 py-4">
+                  <DialogTitle className="text-[14px] font-medium leading-6 text-[#262626]">Sector</DialogTitle>
+                </div>
+                <div className="px-4 py-3 space-y-4">
+                  {relativeStrengthSectors.map((opt) => {
+                    const active = relativeStrengthSector === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => {
+                          setRelativeStrengthSector(opt);
+                          setRelativeStrengthSectorSheetOpen(false);
+                        }}
+                        className="flex items-center gap-2 text-left"
+                      >
+                        <span className={cn("inline-flex h-4 w-4 items-center justify-center rounded-full border-[1.5px]", active ? "border-foreground" : "border-[#919191]")}>
+                          {active ? <span className="h-2 w-2 rounded-full bg-foreground" /> : null}
+                        </span>
+                        <span className="text-xs font-semibold text-[#262626]">{opt}</span>
                       </button>
                     );
                   })}
