@@ -931,6 +931,149 @@ export const MOCK_ALERTS: AlertItem[] = [
   },
 ];
 
+// ─── PUBLISHERS ─────────────────────────────────────────────────────────────
+
+export interface Publisher {
+  handle: string;
+  displayName: string;
+  verified: boolean;
+  followers: number;
+  totalLikes: number;
+  totalPublications: number;
+  joinedAt: string;
+  bio: string;
+  avatar: string; // first letter used as avatar
+}
+
+export const PUBLISHERS: Publisher[] = [
+  { handle: "quant_priya", displayName: "Priya Sharma", verified: true, followers: 5120, totalLikes: 4280, totalPublications: 12, joinedAt: "2025-06-10", bio: "Quant trader | Algo enthusiast | Nifty 500 specialist", avatar: "P" },
+  { handle: "trader_vikram", displayName: "Vikram Mehta", verified: true, followers: 2840, totalLikes: 2190, totalPublications: 8, joinedAt: "2025-07-22", bio: "Full-time intraday trader | ORB & volume setups", avatar: "V" },
+  { handle: "invest_ananya", displayName: "Ananya Krishnan", verified: true, followers: 3240, totalLikes: 2640, totalPublications: 6, joinedAt: "2025-05-15", bio: "Value investor | Long-term compounder hunter", avatar: "A" },
+  { handle: "sectorpro", displayName: "Deepak Iyer", verified: true, followers: 1680, totalLikes: 1340, totalPublications: 5, joinedAt: "2025-08-01", bio: "Sector rotation expert | Positional trader", avatar: "D" },
+  { handle: "btst_king", displayName: "Rahul Trades", verified: false, followers: 890, totalLikes: 890, totalPublications: 4, joinedAt: "2025-09-14", bio: "BTST specialist | Closing bell scanner", avatar: "R" },
+  { handle: "rsi_master", displayName: "Arjun Patel", verified: false, followers: 420, totalLikes: 456, totalPublications: 3, joinedAt: "2025-11-20", bio: "RSI divergence hunter | Swing trader", avatar: "A" },
+  { handle: "newtrader99", displayName: "Sneha Gupta", verified: false, followers: 45, totalLikes: 18, totalPublications: 1, joinedAt: "2026-03-10", bio: "Learning to build scanners!", avatar: "S" },
+  { handle: "momentum_raj", displayName: "Raj Kapoor", verified: true, followers: 4200, totalLikes: 3800, totalPublications: 9, joinedAt: "2025-04-05", bio: "Momentum breakout trader | 15+ yrs experience", avatar: "R" },
+  { handle: "option_queen", displayName: "Meera Nair", verified: true, followers: 6100, totalLikes: 5200, totalPublications: 14, joinedAt: "2025-03-18", bio: "Options strategist | Volatility plays", avatar: "M" },
+  { handle: "chart_guru", displayName: "Suresh Babu", verified: false, followers: 1120, totalLikes: 980, totalPublications: 7, joinedAt: "2025-10-02", bio: "Price action trader | Pattern recognition", avatar: "S" },
+];
+
+// ─── LIVE MARKET PICKS ──────────────────────────────────────────────────────
+
+export interface LiveMarketPick {
+  id: string;
+  symbol: string;
+  company: string;
+  breakoutType: string;
+  ltp: number;
+  volume: number;
+  time: string;
+  signal: "bullish" | "bearish";
+}
+
+export const LIVE_MARKET_PICKS: LiveMarketPick[] = [
+  { id: "lmp-1", symbol: "RELIANCE", company: "Reliance Industries", breakoutType: "10% near 52W Low", ltp: 2847.50, volume: 4820000, time: "10:55:58", signal: "bearish" },
+  { id: "lmp-2", symbol: "NCC", company: "NCC Ltd", breakoutType: "7.5% near 52W Low", ltp: 130.94, volume: 5403515, time: "10:55:58", signal: "bearish" },
+  { id: "lmp-3", symbol: "TORNTPOWER", company: "Torrent Power", breakoutType: "10% near 52W Low", ltp: 1305.80, volume: 885043, time: "10:55:58", signal: "bearish" },
+  { id: "lmp-4", symbol: "ITI", company: "ITI Limited", breakoutType: "5% near 52W Low", ltp: 259.05, volume: 764955, time: "10:55:58", signal: "bearish" },
+  { id: "lmp-5", symbol: "SHYAMMETL", company: "Shyam Metalics & Energy", breakoutType: "5% near 52W Low", ltp: 771.10, volume: 747503, time: "10:55:58", signal: "bearish" },
+  { id: "lmp-6", symbol: "BHARTIARTL", company: "Bharti Airtel", breakoutType: "7.5% near 52W Low", ltp: 1792.40, volume: 14243129, time: "10:55:58", signal: "bearish" },
+  { id: "lmp-7", symbol: "INDIACEM", company: "India Cements", breakoutType: "5% near 52W Low", ltp: 434.60, volume: 1196127, time: "10:55:58", signal: "bearish" },
+  { id: "lmp-8", symbol: "INDIAMART", company: "IndiaMART InterMesh", breakoutType: "7.5% near 52W Low", ltp: 1866.30, volume: 132068, time: "10:55:58", signal: "bearish" },
+  { id: "lmp-9", symbol: "CYIENT", company: "Cyient Ltd", breakoutType: "5% near 52W Low", ltp: 752.85, volume: 302835, time: "10:55:58", signal: "bearish" },
+  { id: "lmp-10", symbol: "TATAINVEST", company: "Tata Investment Corp", breakoutType: "5% near 52W Low", ltp: 541.15, volume: 909158, time: "10:55:58", signal: "bearish" },
+  { id: "lmp-11", symbol: "LTIM", company: "LTI Mindtree", breakoutType: "7.5% near 52W Low", ltp: 4012.80, volume: 532474, time: "10:55:58", signal: "bearish" },
+  { id: "lmp-12", symbol: "GUJGAS", company: "Gujarat Gas", breakoutType: "5% near 52W Low", ltp: 507.25, volume: 2330506, time: "10:55:58", signal: "bearish" },
+];
+
+// ─── UPSTOX SCANNER CATEGORIES ──────────────────────────────────────────────
+
+export interface UpstoxScannerCategory {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  scannerCount: number;
+  color: string;
+}
+
+export const UPSTOX_SCANNER_CATEGORIES: UpstoxScannerCategory[] = [
+  { id: "usc-1", name: "Trending Commodities", description: "Top trending commodity futures and stocks", icon: "flame", scannerCount: 12, color: "bg-orange-100 text-orange-700" },
+  { id: "usc-2", name: "Trending MTFs", description: "Most traded mutual funds this week", icon: "trending-up", scannerCount: 8, color: "bg-blue-100 text-blue-700" },
+  { id: "usc-3", name: "Trending Stocks", description: "Stocks gaining traction across segments", icon: "bar-chart", scannerCount: 15, color: "bg-green-100 text-green-700" },
+  { id: "usc-4", name: "Intraday Screeners", description: "Pre-built intraday setups by Upstox", icon: "zap", scannerCount: 10, color: "bg-yellow-100 text-yellow-700" },
+  { id: "usc-5", name: "Buzzing Stocks", description: "Stocks with unusual volume and activity", icon: "activity", scannerCount: 6, color: "bg-red-100 text-red-700" },
+  { id: "usc-6", name: "Trending Options", description: "Options with high OI and volume changes", icon: "layers", scannerCount: 9, color: "bg-purple-100 text-purple-700" },
+  { id: "usc-7", name: "Options Smartlist", description: "Curated options strategies for the week", icon: "list", scannerCount: 7, color: "bg-indigo-100 text-indigo-700" },
+  { id: "usc-8", name: "Momentum Gainers", description: "Stocks with strong price momentum", icon: "rocket", scannerCount: 11, color: "bg-emerald-100 text-emerald-700" },
+  { id: "usc-9", name: "Movers & Shakers", description: "Biggest price movers of the day", icon: "move", scannerCount: 5, color: "bg-amber-100 text-amber-700" },
+  { id: "usc-10", name: "Top Rated Mutual Funds", description: "Highest rated MFs by performance", icon: "star", scannerCount: 8, color: "bg-cyan-100 text-cyan-700" },
+  { id: "usc-11", name: "Most Bought on Upstox", description: "Most purchased stocks by Upstox users", icon: "shopping-cart", scannerCount: 10, color: "bg-pink-100 text-pink-700" },
+];
+
+// ─── FEED ITEMS ─────────────────────────────────────────────────────────────
+
+export interface FeedAlertItem {
+  id: string;
+  date: string;
+  stock: string;
+  time: string;
+  screenerName: string;
+  screenerId: string;
+}
+
+export interface FeedPublisherItem {
+  id: string;
+  publisherHandle: string;
+  publisherName: string;
+  screenerName: string;
+  screenerId: string;
+  date: string;
+  time: string;
+}
+
+export const FEED_ALERTS: FeedAlertItem[] = [
+  { id: "fa-1", date: "2026-03-31", stock: "RELIANCE", time: "10:42 AM", screenerName: "Morning Power Scanner", screenerId: "ms-001" },
+  { id: "fa-2", date: "2026-03-31", stock: "HDFCBANK", time: "10:38 AM", screenerName: "Nifty 500 Momentum Beast", screenerId: "ms-002" },
+  { id: "fa-3", date: "2026-03-31", stock: "INFY", time: "09:52 AM", screenerName: "Morning Power Scanner", screenerId: "ms-001" },
+  { id: "fa-4", date: "2026-03-30", stock: "TATAMOTORS", time: "03:18 PM", screenerName: "BTST Closing Bell Scanner", screenerId: "ms-003" },
+  { id: "fa-5", date: "2026-03-30", stock: "WIPRO", time: "11:24 AM", screenerName: "RSI Reversal Hunter", screenerId: "ms-005" },
+  { id: "fa-6", date: "2026-03-29", stock: "ICICIBANK", time: "10:15 AM", screenerName: "Nifty 500 Momentum Beast", screenerId: "ms-002" },
+  { id: "fa-7", date: "2026-03-29", stock: "BAJFINANCE", time: "09:45 AM", screenerName: "Morning Power Scanner", screenerId: "ms-001" },
+  { id: "fa-8", date: "2026-03-28", stock: "SUNPHARMA", time: "02:55 PM", screenerName: "Sector Leader Rotation", screenerId: "ms-006" },
+];
+
+export const FEED_PUBLISHER_ACTIVITY: FeedPublisherItem[] = [
+  { id: "fp-1", publisherHandle: "quant_priya", publisherName: "Priya Sharma", screenerName: "Nifty Midcap Momentum", screenerId: "ms-002", date: "2026-03-31", time: "08:30 AM" },
+  { id: "fp-2", publisherHandle: "trader_vikram", publisherName: "Vikram Mehta", screenerName: "ORB+ Volume Combo v2", screenerId: "ms-001", date: "2026-03-30", time: "07:15 PM" },
+  { id: "fp-3", publisherHandle: "momentum_raj", publisherName: "Raj Kapoor", screenerName: "Breakout Surge Scanner", screenerId: "ms-002", date: "2026-03-30", time: "04:00 PM" },
+  { id: "fp-4", publisherHandle: "option_queen", publisherName: "Meera Nair", screenerName: "IV Crush Alert Scanner", screenerId: "ms-002", date: "2026-03-29", time: "09:00 AM" },
+  { id: "fp-5", publisherHandle: "invest_ananya", publisherName: "Ananya Krishnan", screenerName: "Quality at a Discount v3", screenerId: "ms-004", date: "2026-03-28", time: "06:45 PM" },
+  { id: "fp-6", publisherHandle: "sectorpro", publisherName: "Deepak Iyer", screenerName: "IT Sector Rotation April", screenerId: "ms-006", date: "2026-03-27", time: "05:30 PM" },
+];
+
+// ─── USER'S SCANNERS ────────────────────────────────────────────────────────
+
+export interface UserScanner {
+  id: string;
+  name: string;
+  description: string;
+  persona: ScannerPersona;
+  conditions: string;
+  createdAt: string;
+  updatedAt: string;
+  likes: number;
+  views: number;
+  status: "published" | "saved";
+}
+
+export const USER_SCANNERS: UserScanner[] = [
+  { id: "us-1", name: "My Morning ORB Scanner", description: "Custom ORB with volume filter for Nifty 50 stocks", persona: "intraday", conditions: "ORB Breakout AND Volume > 2x Avg AND Close > VWAP", createdAt: "2026-02-10", updatedAt: "2026-03-28", likes: 24, views: 180, status: "published" },
+  { id: "us-2", name: "Swing EMA Crossover", description: "20 EMA crossing 50 EMA with RSI confirmation", persona: "swing", conditions: "EMA(20) crossed above EMA(50) AND RSI(14) > 50", createdAt: "2026-01-20", updatedAt: "2026-03-15", likes: 8, views: 45, status: "published" },
+  { id: "us-3", name: "BTST Experiment v2", description: "Testing closing range breakout with sector filter", persona: "btst", conditions: "Close > 98% of Day High AND Sector RS > 1.2", createdAt: "2026-03-20", updatedAt: "2026-03-30", likes: 0, views: 0, status: "saved" },
+  { id: "us-4", name: "Value Picks - Q4 FY26", description: "Low PE high growth stocks for quarterly review", persona: "longterm", conditions: "PE < 15 AND Revenue Growth > 15 AND ROE > 18", createdAt: "2026-03-25", updatedAt: "2026-03-31", likes: 0, views: 0, status: "saved" },
+];
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 export const PERSONA_LABELS: Record<ScannerPersona, string> = {
