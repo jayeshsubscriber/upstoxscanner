@@ -23,7 +23,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isLoggedIn] = useState(true); // mock: always logged in
-  const hideGlobalHeader = location.pathname === "/diy" && Boolean((location.state as { quickFullScreen?: boolean } | null)?.quickFullScreen);
+  const hideGlobalHeader =
+    (location.pathname === "/diy" && Boolean((location.state as { quickFullScreen?: boolean } | null)?.quickFullScreen)) ||
+    location.pathname.startsWith("/app/mobile/");
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

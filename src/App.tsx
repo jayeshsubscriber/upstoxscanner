@@ -11,6 +11,7 @@ import { CreatorProfilePage } from "@/pages/CreatorProfilePage";
 import { DiyUiSamplesPage } from "@/pages/DiyUiSamplesPage";
 import { AppScannersHubPage } from "@/pages/AppScannersHubPage";
 import { MobileScannerPage } from "@/pages/MobileScannerPage";
+import { MobileMyListsPage } from "@/pages/MobileMyListsPage";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/app/scanners" element={<AppScannersHubPage />} />
           <Route path="/app/scanners/mobile" element={<MobileScannerPage />} />
+          <Route path="/app/mobile/watchlist" element={<MobileMyListsPage />} />
           <Route path="/scanners" element={<ScannerLibraryPage />} />
           <Route path="/scanners/:id" element={<ScannerDetailPage />} />
           <Route path="/diy" element={<DIYScreenerPage />} />
