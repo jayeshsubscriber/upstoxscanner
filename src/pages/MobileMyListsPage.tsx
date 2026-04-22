@@ -32,7 +32,6 @@ import {
   Plus,
   Search,
   Trash2,
-  Play,
   Pencil,
   Eye,
   Heart,
@@ -2118,7 +2117,7 @@ const TIMEFRAME_OPTIONS = ["1m", "5m", "15m", "30m", "1D"];
 const CONDITIONS = ["Above", "Below", "Crosses above", "Crosses below", "Between"] as const;
 type Condition = (typeof CONDITIONS)[number];
 type CompareType = "Price" | "MA" | "Indicator" | "Value" | "Range";
-const COMPARE_INDICATORS = [
+export const _COMPARE_INDICATORS = [
   "Bollinger Band (Upper)",
   "Bollinger Band (Lower)",
   "Donchian (Upper)",
@@ -3671,7 +3670,7 @@ function previewRightSide(r: RadioState): string {
   return "";
 }
 
-function VariantChips(p: VariantProps) {
+export function _VariantChips(p: VariantProps) {
   const isBetween = p.condition === "Between";
   const rightSide = isBetween
     ? `${p.rangeLow || "min"} and ${p.rangeHigh || "max"}`
@@ -5207,7 +5206,7 @@ function CommunityRow({
   );
 }
 
-function StatCard({
+export function _StatCard({
   icon,
   value,
   label,
@@ -5633,7 +5632,7 @@ function ColumnPickerSheet({
   );
 }
 
-function Section({
+export function _Section({
   label,
   trailing,
   children,
@@ -5665,7 +5664,7 @@ function Section({
   );
 }
 
-function AddRuleButton() {
+export function _AddRuleButton() {
   return (
     <button
       className="flex items-center"
@@ -5682,7 +5681,7 @@ function AddRuleButton() {
   );
 }
 
-function UniverseChip({ label, active = false }: { label: string; active?: boolean }) {
+export function _UniverseChip({ label, active = false }: { label: string; active?: boolean }) {
   return (
     <button
       className="flex items-center justify-center"
@@ -5702,7 +5701,7 @@ function UniverseChip({ label, active = false }: { label: string; active?: boole
   );
 }
 
-function RuleCard({
+export function _RuleCard({
   index,
   indicator,
   operator,
@@ -5758,7 +5757,7 @@ function RuleCard({
   );
 }
 
-function LogicOperator() {
+export function _LogicOperator() {
   return (
     <div className="flex items-center" style={{ gap: 8, padding: "0 4px" }}>
       <div style={{ flex: 1, height: 1, background: C.ui3 }} />
@@ -6123,7 +6122,7 @@ function IconButton({ icon }: { icon: React.ReactNode }) {
 }
 
 // ───── Plus banner ─────
-function PlusBanner() {
+export function _PlusBanner() {
   return (
     <div
       className="flex items-center justify-between"
@@ -6781,7 +6780,7 @@ type PresetCard = {
   tag?: string;
 };
 
-const STOCK_PRESETS: PresetCard[] = [
+export const _STOCK_PRESETS: PresetCard[] = [
   { title: "52-week breakouts", subtitle: "Stocks crossing their 1-year high today.", logos: ["H", "F", "I"], views: "12.4k views" },
   { title: "Volume shockers", subtitle: "Today's volume is 3× the 20-day average.", logos: ["T", "R", "S"], views: "9.8k views" },
   { title: "Bullish RSI reversal", subtitle: "RSI crossed above 30 in the last 3 days.", logos: ["B", "K", "L"], views: "7.1k views" },
