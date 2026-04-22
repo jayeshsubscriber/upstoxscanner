@@ -1,5 +1,29 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { mobileColors as C, mobileButton, MOBILE_CANVAS_WIDTH } from "@/lib/mobileDesignSystem";
+
+// ────────────────────────────────────────────────────────────────────────────
+// Responsive helpers (desktop shell lives in this same file; mobile untouched)
+// ────────────────────────────────────────────────────────────────────────────
+function useIsDesktop(minWidth: number = 1024): boolean {
+  const getInitial = () =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia(`(min-width: ${minWidth}px)`).matches
+      : false;
+  const [isDesktop, setIsDesktop] = useState<boolean>(getInitial);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia(`(min-width: ${minWidth}px)`);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    setIsDesktop(mql.matches);
+    if (mql.addEventListener) mql.addEventListener("change", handler);
+    else mql.addListener(handler);
+    return () => {
+      if (mql.removeEventListener) mql.removeEventListener("change", handler);
+      else mql.removeListener(handler);
+    };
+  }, [minWidth]);
+  return isDesktop;
+}
 import {
   Bell,
   ChevronDown,
@@ -34,6 +58,11 @@ import {
   Wand2,
   Share2,
   Info,
+  ArrowRight,
+  Maximize2,
+  Zap,
+  TrendingUp,
+  AlarmClock,
 } from "lucide-react";
 
 /**
@@ -42,7 +71,7 @@ import {
  * All values come from src/lib/mobileDesignSystem.ts.
  */
 type TabKey = "Watchlist" | "Options" | "Screeners";
-type View = "tabs" | "create" | "addFilter";
+type View = "tabs" | "create" | "addFilter" | "discover";
 
 type Filter = { label: string; value: string };
 
@@ -108,6 +137,23 @@ export function MobileMyListsPage() {
     ...extraFilters,
   ];
 
+  const isDesktop = useIsDesktop();
+  if (isDesktop) {
+    return (
+      <DesktopShell
+        scanUniverse={scanUniverse}
+        setScanUniverse={setScanUniverse}
+        industries={industries}
+        setIndustries={setIndustries}
+        sectors={sectors}
+        setSectors={setSectors}
+        extraFilters={extraFilters}
+        setExtraFilters={setExtraFilters}
+        filters={filters}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen w-full flex justify-center bg-neutral-100 py-8">
       <div
@@ -121,7 +167,13 @@ export function MobileMyListsPage() {
           color: C.textPrimary,
         }}
       >
-        {view === "addFilter" ? (
+        {view === "discover" ? (
+          <>
+            <StatusBar />
+            <DiscoverScreenersScreen onBack={() => setView("tabs")} />
+            <SystemBar />
+          </>
+        ) : view === "addFilter" ? (
           <>
             <StatusBar />
             <AddFilterScreen
@@ -168,7 +220,10 @@ export function MobileMyListsPage() {
             )}
             {activeTab === "Options" && <EmptyTabBody />}
             {activeTab === "Screeners" && (
-              <ScreenersEmptyState onCreate={() => setView("create")} />
+              <ScreenersEmptyState
+                onCreate={() => setView("create")}
+                onDiscover={() => setView("discover")}
+              />
             )}
             {activeTab !== "Screeners" && <BottomFABs />}
             <BottomNav />
@@ -4277,26 +4332,37 @@ function BottomSheetShell({
   onAction?: () => void;
   headerRight?: React.ReactNode;
 }) {
+  const isDesktop = useIsDesktop();
+  const overlayPositionClass = isDesktop ? "fixed inset-0" : "absolute inset-0";
+  const panelRadiusStyle: React.CSSProperties = isDesktop
+    ? { borderRadius: 12, width: "min(520px, 92vw)", maxHeight: "85vh" }
+    : { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "85%" };
   return (
     <div
-      className="absolute inset-0 flex flex-col"
-      style={{ zIndex: 50, background: "rgba(0,0,0,0.4)" }}
+      className={`${overlayPositionClass} flex flex-col`}
+      style={{
+        zIndex: 50,
+        background: "rgba(0,0,0,0.4)",
+        alignItems: isDesktop ? "center" : undefined,
+        justifyContent: isDesktop ? "center" : undefined,
+      }}
       onClick={onClose}
     >
-      <div className="flex-1" />
+      {!isDesktop && <div className="flex-1" />}
       <div
         onClick={(e) => e.stopPropagation()}
         className="flex flex-col"
         style={{
           background: C.bgDefault,
-          borderTopLeftRadius: 20, borderTopRightRadius: 20,
-          maxHeight: "85%",
+          ...panelRadiusStyle,
           minHeight: 0,
         }}
       >
-        <div className="flex items-center justify-center shrink-0" style={{ paddingTop: 8, paddingBottom: 4 }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: C.ui3 }} />
-        </div>
+        {!isDesktop && (
+          <div className="flex items-center justify-center shrink-0" style={{ paddingTop: 8, paddingBottom: 4 }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: C.ui3 }} />
+          </div>
+        )}
         <div className="flex items-center shrink-0" style={{ padding: "8px 16px 12px", gap: 8 }}>
           <span style={{
             fontFamily: "'Messina Sans', 'Inter', sans-serif",
@@ -5717,7 +5783,7 @@ function LogicOperator() {
   );
 }
 
-function ScreenersEmptyState({ onCreate }: { onCreate: () => void }) {
+function ScreenersEmptyState({ onCreate, onDiscover }: { onCreate: () => void; onDiscover?: () => void }) {
   return (
     <div
       className="flex flex-col"
@@ -5750,6 +5816,7 @@ function ScreenersEmptyState({ onCreate }: { onCreate: () => void }) {
         icon={<Compass size={20} color={C.brandPurple} />}
         title="Discover Ready-Made Scanners"
         subtitle="Browse 100+ expert-built scanners across trading styles."
+        onClick={onDiscover}
       />
       <ScreenerOptionCard
         icon={<Wand2 size={20} color={C.brandPurple} />}
@@ -6702,6 +6769,943 @@ function NavTab({
   );
 }
 
+// ───────────────────────────────────────────────
+// Discover Screeners — L2 Preset Screeners Listing
+// ───────────────────────────────────────────────
+type PresetCard = {
+  title: string;
+  subtitle: string;
+  logos: string[]; // initials
+  views: string;
+  plus?: boolean;
+  tag?: string;
+};
+
+const STOCK_PRESETS: PresetCard[] = [
+  { title: "52-week breakouts", subtitle: "Stocks crossing their 1-year high today.", logos: ["H", "F", "I"], views: "12.4k views" },
+  { title: "Volume shockers", subtitle: "Today's volume is 3× the 20-day average.", logos: ["T", "R", "S"], views: "9.8k views" },
+  { title: "Bullish RSI reversal", subtitle: "RSI crossed above 30 in the last 3 days.", logos: ["B", "K", "L"], views: "7.1k views" },
+];
+
+type StockMetric = {
+  label: string;
+  ltp: string;
+  ltpPos: boolean;
+  tag: string;
+  segment: string;
+  subHeading: string;
+  slots: { over: string; label: string }[];
+};
+
+const STOCK_METRIC_CARDS: StockMetric[] = [
+  {
+    label: "RELIANCE",
+    ltp: "+2.34%",
+    ltpPos: true,
+    tag: "Bullish",
+    segment: "EQ · NSE",
+    subHeading: "₹2,945.20",
+    slots: [
+      { over: "Open", label: "₹2,910" },
+      { over: "High", label: "₹2,962" },
+      { over: "Vol", label: "12.4M" },
+    ],
+  },
+  {
+    label: "HDFCBANK",
+    ltp: "+1.18%",
+    ltpPos: true,
+    tag: "Breakout",
+    segment: "EQ · NSE",
+    subHeading: "₹1,742.50",
+    slots: [
+      { over: "Open", label: "₹1,725" },
+      { over: "High", label: "₹1,749" },
+      { over: "Vol", label: "8.2M" },
+    ],
+  },
+];
+
+const ETF_PRESETS: PresetCard[] = [
+  { title: "Top gaining ETFs", subtitle: "ETFs with the largest 1-day gain.", logos: ["N", "G", "B"], views: "4.5k views" },
+  { title: "Sector rotation leaders", subtitle: "ETFs with strongest 1-month relative strength.", logos: ["I", "P", "F"], views: "3.2k views" },
+];
+
+const HEALTH_PRESETS: PresetCard[] = [
+  { title: "Debt vs equity health", subtitle: "Companies with low debt and rising profits.", logos: ["A", "T", "R"], views: "6.7k views", plus: true, tag: "Fundamentals" },
+  { title: "Earnings momentum", subtitle: "EPS growing faster than revenue for 3 quarters.", logos: ["I", "B", "H"], views: "5.2k views", plus: true, tag: "Quality" },
+];
+
+const FUTURES_PRESETS: PresetCard[] = [
+  { title: "Open interest spikes", subtitle: "Futures with unusual OI buildup today.", logos: ["N", "R", "T"], views: "8.4k views", plus: true, tag: "Derivatives" },
+  { title: "Long buildup", subtitle: "Price up + OI up — strong long signals.", logos: ["B", "I", "S"], views: "4.9k views", plus: true, tag: "Derivatives" },
+];
+
+const STOCK_TABLE: {
+  sym: string;
+  sub: string;
+  ltp: string;
+  pct: string;
+  up: boolean;
+  brand: string;
+  mark: string;
+}[] = [
+  { sym: "HDFC Bank", sub: "HDFCBANK · BANK", ltp: "1,742.50", pct: "+1.24%", up: true, brand: "#004C8F", mark: "H" },
+  { sym: "Federal Bank", sub: "FEDERALBNK · BANK", ltp: "192.30", pct: "+2.15%", up: true, brand: "#00488E", mark: "F" },
+  { sym: "IDFC First Bank", sub: "IDFCFIRSTB · BANK", ltp: "78.85", pct: "-0.62%", up: false, brand: "#9B1C25", mark: "I" },
+  { sym: "Kotak Bank", sub: "KOTAKBANK · BANK", ltp: "1,815.40", pct: "+0.48%", up: true, brand: "#ED1C24", mark: "K" },
+  { sym: "ICICI Bank", sub: "ICICIBANK · BANK", ltp: "1,234.10", pct: "-0.31%", up: false, brand: "#FF6600", mark: "I" },
+];
+
+function DiscoverScreenersScreen({ onBack }: { onBack: () => void }) {
+  const [activeChip, setActiveChip] = useState(0);
+  const chips = ["All", "Trending", "Intraday", "Swing", "Long term", "F&O"];
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", background: C.bgDefault }}>
+      {/* Top bar with back */}
+      <div
+        className="flex items-center"
+        style={{ height: 48, padding: "0 12px", gap: 8, background: C.bgDefault, borderBottom: `1px solid ${C.ui2}` }}
+      >
+        <button onClick={onBack} className="flex items-center justify-center" style={{ width: 32, height: 32 }}>
+          <ChevronLeft size={20} color={C.textPrimary} />
+        </button>
+        <span style={{ fontFamily: "'Messina Sans', 'Inter', sans-serif", fontWeight: 700, fontSize: 16, color: C.textPrimary }}>
+          Discover Screeners
+        </span>
+      </div>
+
+      {/* Hero */}
+      <div
+        className="flex flex-col"
+        style={{
+          padding: "24px 16px 20px",
+          gap: 16,
+          background: "radial-gradient(120% 80% at 50% 0%, #EAF1FA 0%, #FFFFFF 100%)",
+        }}
+      >
+        <div className="flex flex-col" style={{ gap: 6 }}>
+          <span style={{ fontFamily: "'Messina Sans', 'Inter', sans-serif", fontWeight: 700, fontSize: 22, lineHeight: "28px", color: C.textPrimary }}>
+            Find your next trade in seconds
+          </span>
+          <span style={{ fontSize: 13, lineHeight: "18px", color: C.textSecondary }}>
+            Expert-built scanners across trading styles, sectors, and timeframes.
+          </span>
+        </div>
+        <div className="flex items-center" style={{ gap: 8, flexWrap: "wrap" }}>
+          {[
+            { icon: <Maximize2 size={12} color={C.brandPurple} />, label: "Fullscreen" },
+            { icon: <AlarmClock size={12} color={C.brandPurple} />, label: "Alerts" },
+            { icon: <TrendingUp size={12} color={C.brandPurple} />, label: "Trends" },
+            { icon: <Zap size={12} color={C.brandPurple} />, label: "Real-time" },
+          ].map((p) => (
+            <div
+              key={p.label}
+              className="flex items-center"
+              style={{
+                gap: 4,
+                padding: "4px 8px",
+                borderRadius: 9999,
+                background: "linear-gradient(90deg, rgba(43,127,255,0.10) 0%, rgba(173,70,255,0.10) 100%)",
+                border: "0.5px solid rgba(43,127,255,0.20)",
+              }}
+            >
+              {p.icon}
+              <span
+                style={{
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  fontSize: 10,
+                  fontWeight: 500,
+                  lineHeight: "14px",
+                  color: C.brandPurple,
+                }}
+              >
+                {p.label}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center" style={{ gap: 8 }}>
+          <button
+            className="flex items-center justify-center"
+            style={{
+              width: 172,
+              height: 32,
+              padding: "0 12px",
+              gap: 4,
+              background: C.brandPurple,
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 6,
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontSize: 12,
+              fontWeight: 600,
+              lineHeight: "16px",
+            }}
+          >
+            <span>Browse all</span>
+            <ArrowRight size={16} color="#FFFFFF" />
+          </button>
+          <button
+            className="flex items-center justify-center"
+            style={{
+              width: 172,
+              height: 32,
+              padding: "0 12px",
+              gap: 4,
+              background: C.bgDefault,
+              color: C.brandPurple,
+              border: `1px solid ${C.brandPurple}`,
+              borderRadius: 6,
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontSize: 12,
+              fontWeight: 600,
+              lineHeight: "16px",
+            }}
+          >
+            <span>Custom</span>
+            <Plus size={16} color={C.brandPurple} />
+          </button>
+        </div>
+      </div>
+
+      {/* Filter chips */}
+      <div
+        className="flex items-center"
+        style={{ gap: 8, padding: "12px 16px", overflowX: "auto", borderBottom: `1px solid ${C.ui2}` }}
+      >
+        {chips.map((c, i) => {
+          const active = activeChip === i;
+          return (
+            <button
+              key={c}
+              onClick={() => setActiveChip(i)}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 9999,
+                background: active ? C.bgPlusChipBg : C.bgDefault,
+                border: `1px solid ${active ? C.brandPurple : C.ui3}`,
+                color: active ? C.brandPurple : C.textPrimary,
+                fontSize: 12,
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              {c}
+            </button>
+          );
+        })}
+      </div>
+
+      <DiscoverStocksMetricSection />
+      <DiscoverSection title="Trending ETFs" subtitle="What's moving across themes today." cards={ETF_PRESETS} bg="#EAF1FA" icon={<ETFGradientIcon />} />
+      <DiscoverSection title="Health Checks" subtitle="Quality and fundamental filters." cards={HEALTH_PRESETS} framed icon={<HealthGradientIcon />} />
+      <DiscoverSection title="Futures" subtitle="Derivatives flow and OI insight." cards={FUTURES_PRESETS} framed icon={<FuturesGradientIcon />} />
+
+      <DiscoverStocksTable />
+
+      <DiscoverFooter />
+    </div>
+  );
+}
+
+function ETFGradientIcon() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="etfIconGrad" x1="16" y1="2" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+          <stop offset="0.0662" stopColor="#A8D1FF" />
+          <stop offset="0.9495" stopColor="#2B7FFF" />
+        </linearGradient>
+      </defs>
+      <circle cx="16" cy="16" r="12" stroke="url(#etfIconGrad)" strokeWidth="2" fill="none" />
+      <path d="M16 4 V16 L24 20" stroke="url(#etfIconGrad)" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="16" cy="16" r="3" fill="url(#etfIconGrad)" />
+    </svg>
+  );
+}
+
+function HealthGradientIcon() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="healthIconGrad" x1="16" y1="2" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+          <stop offset="0.0662" stopColor="#FFC9B8" />
+          <stop offset="0.9495" stopColor="#D53627" />
+        </linearGradient>
+      </defs>
+      <path d="M16 28s-11-6.5-11-15a6 6 0 0 1 11-3.3A6 6 0 0 1 27 13c0 8.5-11 15-11 15Z" fill="url(#healthIconGrad)" />
+      <path d="M10 16h3l2-4 2 8 2-4h3" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+
+function FuturesGradientIcon() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="futIconGrad" x1="16" y1="2" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+          <stop offset="0.0662" stopColor="#F7D98B" />
+          <stop offset="0.9495" stopColor="#A07A1F" />
+        </linearGradient>
+      </defs>
+      <rect x="4" y="8" width="10" height="16" rx="2" fill="url(#futIconGrad)" />
+      <rect x="18" y="4" width="10" height="24" rx="2" fill="url(#futIconGrad)" />
+      <path d="M9 6v4M23 2v4M9 22v4M23 26v4" stroke="#A07A1F" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function StocksGradientIcon() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="stocksIconGrad" x1="16" y1="2" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+          <stop offset="0.0662" stopColor="#CFADF1" />
+          <stop offset="0.9495" stopColor="#5A298B" />
+        </linearGradient>
+      </defs>
+      <rect x="4" y="18" width="5" height="10" rx="1" fill="url(#stocksIconGrad)" />
+      <rect x="11" y="12" width="5" height="16" rx="1" fill="url(#stocksIconGrad)" />
+      <rect x="18" y="6" width="5" height="22" rx="1" fill="url(#stocksIconGrad)" />
+      <path d="M5 14L12 9L18 12L27 4" stroke="#5A298B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M23 4H27V8" stroke="#5A298B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function StockMetricCardView({ card }: { card: StockMetric }) {
+  return (
+    <div
+      className="flex flex-col"
+      style={{
+        background: C.bgDefault,
+        border: `1px solid ${C.ui2}`,
+        borderRadius: 12,
+        overflow: "hidden",
+      }}
+    >
+      {/* card-callout */}
+      <div className="flex items-center justify-between" style={{ padding: "8px 12px" }}>
+        <span
+          style={{
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontSize: 10,
+            fontWeight: 600,
+            lineHeight: "14px",
+            color: C.posText,
+            background: C.posBg,
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
+          {card.tag}
+        </span>
+        <TrendingUp size={14} color={C.posText} />
+      </div>
+      <div style={{ height: 1, background: C.ui2 }} />
+      {/* card-header: label + LTP */}
+      <div className="flex items-center justify-between" style={{ padding: "10px 12px" }}>
+        <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 14, fontWeight: 600, color: C.textPrimary }}>
+          {card.label}
+        </span>
+        <span
+          style={{
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontSize: 12,
+            fontWeight: 600,
+            color: card.ltpPos ? C.posText : C.negText,
+          }}
+        >
+          {card.ltp}
+        </span>
+      </div>
+      {/* slot-group */}
+      <div className="flex" style={{ padding: "0 12px 10px" }}>
+        {card.slots.map((s, i) => (
+          <div key={i} className="flex flex-col" style={{ flex: 1, gap: 2 }}>
+            <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 10, fontWeight: 400, color: C.textTertiary }}>
+              {s.over}
+            </span>
+            <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 12, fontWeight: 600, color: C.textPrimary }}>
+              {s.label}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div style={{ height: 1, background: C.ui2 }} />
+      {/* card-footer */}
+      <div className="flex items-center justify-between" style={{ padding: "10px 12px", gap: 8 }}>
+        <div className="flex flex-col" style={{ gap: 2, minWidth: 0 }}>
+          <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 10, fontWeight: 400, color: C.textTertiary }}>
+            {card.segment}
+          </span>
+          <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 14, fontWeight: 600, color: C.textPrimary }}>
+            {card.subHeading}
+          </span>
+        </div>
+        <div className="flex items-center" style={{ gap: 6 }}>
+          <button
+            style={{
+              width: 38,
+              height: 24,
+              background: C.negText,
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 4,
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            Buy
+          </button>
+          <button
+            style={{
+              width: 39,
+              height: 24,
+              background: "#005E3B",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 4,
+              fontFamily: "'Inter', system-ui, sans-serif",
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            Sell
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiscoverStocksMetricSection() {
+  return (
+    <div className="flex flex-col" style={{ padding: "20px 16px", gap: 12, background: C.bgDefault }}>
+      <div className="flex items-start" style={{ gap: 12 }}>
+        <div className="shrink-0">
+          <StocksGradientIcon />
+        </div>
+        <div className="flex flex-col" style={{ gap: 2, flex: 1 }}>
+          <span style={{ fontFamily: "'Messina Sans', 'Inter', sans-serif", fontWeight: 700, fontSize: 16, color: C.textPrimary }}>
+            Stocks
+          </span>
+          <span style={{ fontSize: 12, color: C.textSecondary, lineHeight: "16px" }}>
+            Curated equity setups across timeframes.
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-col" style={{ gap: 10 }}>
+        {STOCK_METRIC_CARDS.map((c) => (
+          <StockMetricCardView key={c.label} card={c} />
+        ))}
+      </div>
+      <button
+        className="flex items-center"
+        style={{ gap: 4, padding: "4px 0", color: C.brandPurple, fontSize: 13, fontWeight: 600 }}
+      >
+        View all
+        <ArrowRight size={14} color={C.brandPurple} />
+      </button>
+    </div>
+  );
+}
+
+function DiscoverSection({
+  title,
+  subtitle,
+  cards,
+  bg,
+  framed,
+  icon,
+}: {
+  title: string;
+  subtitle: string;
+  cards: PresetCard[];
+  bg?: string;
+  framed?: boolean;
+  icon?: React.ReactNode;
+}) {
+  const headerRow = (
+    <div className="flex items-start" style={{ gap: 12 }}>
+      <div className="shrink-0" style={{ width: 32, height: 32 }}>
+        {icon ?? (
+          <div
+            className="flex items-center justify-center"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: "linear-gradient(180deg, #CFADF1 6.62%, #5A298B 94.95%)",
+              color: "#FFFFFF",
+              fontWeight: 700,
+              fontSize: 14,
+            }}
+          >
+            {title.charAt(0)}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col" style={{ gap: 2, flex: 1 }}>
+        <span style={{ fontFamily: "'Messina Sans', 'Inter', sans-serif", fontWeight: 700, fontSize: 16, color: C.textPrimary }}>
+          {title}
+        </span>
+        <span style={{ fontSize: 12, color: C.textSecondary, lineHeight: "16px" }}>{subtitle}</span>
+      </div>
+      <button
+        className="flex items-center shrink-0"
+        style={{ gap: 2, color: C.brandPurple, fontSize: 12, fontWeight: 600 }}
+      >
+        View all
+        <ArrowRight size={12} color={C.brandPurple} />
+      </button>
+    </div>
+  );
+
+  if (framed) {
+    return (
+      <div className="flex flex-col" style={{ padding: "20px 16px", background: bg ?? C.bgDefault }}>
+        <div
+          className="flex flex-col"
+          style={{
+            padding: 12,
+            background: C.bgMuted,
+            borderRadius: 16,
+            gap: 12,
+          }}
+        >
+          {headerRow}
+          <div style={{ height: 1, background: C.ui2 }} />
+          <div className="flex flex-col" style={{ gap: 8 }}>
+            {cards.map((card) => (
+              <PresetMediaCard key={card.title} card={card} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col" style={{ padding: "20px 16px", gap: 12, background: bg ?? C.bgDefault }}>
+      {headerRow}
+      <div className="flex flex-col" style={{ gap: 8 }}>
+        {cards.map((card) => (
+          <PresetMediaCard key={card.title} card={card} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PresetMediaCard({ card }: { card: PresetCard }) {
+  return (
+    <button
+      className="flex flex-col w-full text-left"
+      style={{
+        padding: 12,
+        background: C.bgDefault,
+        border: `1px solid ${C.ui2}`,
+        borderRadius: 12,
+        gap: 10,
+      }}
+    >
+      <div className="flex items-start justify-between" style={{ gap: 8 }}>
+        <div className="flex flex-col" style={{ gap: 2, flex: 1, minWidth: 0 }}>
+          <div className="flex items-center" style={{ gap: 6 }}>
+            {card.plus && (
+              <span
+                className="flex items-center justify-center"
+                style={{
+                  width: 35,
+                  height: 16,
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: 0.5,
+                  color: "#FFFFFF",
+                  background: "#0C0C0C",
+                  borderRadius: 3,
+                }}
+              >
+                PLUS
+              </span>
+            )}
+            <span style={{ fontFamily: "'Messina Sans', 'Inter', sans-serif", fontWeight: 700, fontSize: 14, color: C.textPrimary }}>
+              {card.title}
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: C.textSecondary, lineHeight: "16px" }}>{card.subtitle}</span>
+        </div>
+        <ChevronRight size={16} color={C.textTertiary} />
+      </div>
+      <div className="flex items-center justify-between" style={{ gap: 8 }}>
+        <div className="flex items-center" style={{ gap: -4 }}>
+          {card.logos.map((l, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-center"
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 9999,
+                background: i % 2 === 0 ? C.brandPurple : "#2DD4BF",
+                color: "#FFFFFF",
+                fontSize: 10,
+                fontWeight: 700,
+                marginLeft: i === 0 ? 0 : -6,
+                border: `1.5px solid ${C.bgDefault}`,
+              }}
+            >
+              {l}
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center" style={{ gap: 8 }}>
+          {card.tag && (
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                color: C.brandPurple,
+                background: C.plusPurpleChip,
+                padding: "2px 6px",
+                borderRadius: 4,
+              }}
+            >
+              {card.tag}
+            </span>
+          )}
+          <span style={{ fontSize: 11, color: C.textTertiary }}>{card.views}</span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function DiscoverStocksTable() {
+  const tabs = ["Top gainers", "Top losers", "Most active"];
+  const [tab, setTab] = useState(0);
+  return (
+    <div className="flex flex-col" style={{ padding: "20px 16px", gap: 12, borderTop: `1px solid ${C.ui2}` }}>
+      <div className="flex items-center justify-between">
+        <span style={{ fontFamily: "'Messina Sans', 'Inter', sans-serif", fontWeight: 700, fontSize: 16, color: C.textPrimary }}>
+          Stocks
+        </span>
+        <div
+          className="flex items-center"
+          style={{
+            gap: 4,
+            padding: "4px 8px",
+            border: `1px solid ${C.ui3}`,
+            borderRadius: 6,
+            fontSize: 12,
+            color: C.textPrimary,
+          }}
+        >
+          1D
+          <ChevronDown size={12} color={C.textPrimary} />
+        </div>
+      </div>
+      <div className="flex items-center" style={{ gap: 16, borderBottom: `1px solid ${C.ui2}` }}>
+        {tabs.map((t, i) => (
+          <button
+            key={t}
+            onClick={() => setTab(i)}
+            style={{
+              padding: "8px 0",
+              fontSize: 13,
+              fontWeight: tab === i ? 600 : 500,
+              color: tab === i ? C.brandPurple : C.textSecondary,
+              borderBottom: tab === i ? `2px solid ${C.brandPurple}` : "2px solid transparent",
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+      <div className="flex flex-col">
+        {STOCK_TABLE.map((row) => (
+          <div
+            key={row.sym}
+            className="flex items-center justify-between"
+            style={{ padding: "10px 0", borderBottom: `1px solid ${C.ui1}`, gap: 8 }}
+          >
+            <div className="flex items-center" style={{ gap: 10, flex: 1, minWidth: 0 }}>
+              <div
+                className="flex items-center justify-center shrink-0"
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 9999,
+                  background: row.brand,
+                  color: "#FFFFFF",
+                  fontFamily: "'Inter', system-ui, sans-serif",
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                {row.mark}
+              </div>
+              <div className="flex flex-col" style={{ minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>{row.sym}</span>
+                <span style={{ fontSize: 11, color: C.textTertiary }}>{row.sub}</span>
+              </div>
+            </div>
+            <div className="flex flex-col items-end">
+              <span style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>₹{row.ltp}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: row.up ? C.posText : C.negText }}>{row.pct}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FooterLinkGroup({ title, links }: { title: string; links: string[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col" style={{ borderBottom: "1px solid #4B1F73" }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center justify-between"
+        style={{ padding: "12px 0", width: "100%" }}
+      >
+        <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 14, fontWeight: 600, color: "#FFFFFF" }}>
+          {title}
+        </span>
+        <ChevronDown
+          size={16}
+          color="#AF91D1"
+          style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 120ms" }}
+        />
+      </button>
+      {open && (
+        <div className="flex flex-col" style={{ gap: 8, padding: "0 0 12px" }}>
+          {links.map((l) => (
+            <span
+              key={l}
+              style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 13, color: "#D7BDF0", lineHeight: "20px" }}
+            >
+              {l}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SocialIcon({ label }: { label: string }) {
+  return (
+    <div
+      className="flex items-center justify-center"
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 9999,
+        background: "rgba(255,255,255,0.08)",
+        fontFamily: "'Inter', system-ui, sans-serif",
+        fontSize: 12,
+        fontWeight: 700,
+        color: "#FFFFFF",
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+function DiscoverFooter() {
+  const linkGroups = [
+    { title: "Products", links: ["Stocks", "Mutual Funds", "F&O", "IPO", "Commodities", "Currencies", "Upstox Pro Web", "Upstox Pro Mobile"] },
+    { title: "About", links: ["About us", "Media & Press", "Careers", "Contact us"] },
+    { title: "Partner", links: ["Become a partner", "Refer & earn", "Affiliate program"] },
+    { title: "Support", links: ["Help & support", "How to open an account", "Fund transfer", "Margin calculator"] },
+    { title: "Resources", links: ["Trading view", "Market news", "Learning center", "Blog", "Glossary"] },
+  ];
+  const stocksCloud = Array.from({ length: 28 }, (_, i) => `Links ${i + 1}`);
+
+  return (
+    <div className="flex flex-col" style={{ background: "#37135B", padding: "32px 16px", gap: 24, color: "#FFFFFF" }}>
+      {/* Wordmark + description */}
+      <div className="flex flex-col" style={{ gap: 12 }}>
+        <div className="flex items-center" style={{ gap: 8 }}>
+          <div
+            className="flex items-center justify-center"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              background: C.brandPurpleLogo,
+              fontFamily: "'Messina Sans', 'Inter', sans-serif",
+              fontSize: 14,
+              fontWeight: 700,
+            }}
+          >
+            U
+          </div>
+          <span style={{ fontFamily: "'Messina Sans', 'Inter', sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: 0.2 }}>
+            upstox
+          </span>
+        </div>
+        <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 12, lineHeight: "18px", color: "#D7BDF0" }}>
+          Upstox is one of India's leading discount brokers, offering investing and trading across stocks,
+          F&O, mutual funds, IPOs, and more — all on a fast, no-frills platform.
+        </span>
+        <div className="flex items-center" style={{ gap: 8 }}>
+          <span
+            className="flex items-center"
+            style={{
+              gap: 4,
+              padding: "4px 8px",
+              borderRadius: 9999,
+              border: "1px solid rgba(255,255,255,0.2)",
+              fontSize: 11,
+              color: "#FFFFFF",
+            }}
+          >
+            🇮🇳 India
+          </span>
+          <span
+            className="flex items-center"
+            style={{
+              padding: "4px 8px",
+              borderRadius: 9999,
+              border: "1px solid rgba(255,255,255,0.2)",
+              fontSize: 11,
+              color: "#FFFFFF",
+            }}
+          >
+            INR ₹
+          </span>
+        </div>
+      </div>
+
+      {/* Download-app card */}
+      <div
+        className="flex items-center justify-between"
+        style={{ padding: 12, background: C.brandPurple, borderRadius: 12, gap: 12 }}
+      >
+        <div className="flex flex-col" style={{ gap: 4, flex: 1 }}>
+          <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 13, fontWeight: 600 }}>
+            Download the mobile application today
+          </span>
+          <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 11, color: "#E8E7FF" }}>
+            Trade anywhere, anytime.
+          </span>
+        </div>
+        <div className="flex items-center" style={{ gap: 6 }}>
+          <div
+            className="flex items-center justify-center"
+            style={{ width: 36, height: 36, borderRadius: 8, background: "#FFFFFF", fontSize: 16 }}
+          >
+            ▶
+          </div>
+          <div
+            className="flex items-center justify-center"
+            style={{ width: 36, height: 36, borderRadius: 8, background: "#FFFFFF", fontSize: 16 }}
+          >
+
+          </div>
+        </div>
+      </div>
+
+      {/* Collapsible link groups */}
+      <div className="flex flex-col">
+        {linkGroups.map((g) => (
+          <FooterLinkGroup key={g.title} title={g.title} links={g.links} />
+        ))}
+      </div>
+
+      {/* Stocks link cloud */}
+      <div className="flex flex-col" style={{ gap: 10 }}>
+        <span
+          style={{
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontSize: 12,
+            fontWeight: 700,
+            color: "#AF91D1",
+            letterSpacing: 0.5,
+            textTransform: "uppercase",
+          }}
+        >
+          Stocks
+        </span>
+        <div className="flex flex-wrap" style={{ gap: "6px 0" }}>
+          {stocksCloud.map((s, i) => (
+            <div key={s} className="flex items-center">
+              <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 11, color: "#D7BDF0", padding: "2px 6px" }}>
+                {s}
+              </span>
+              {i < stocksCloud.length - 1 && (
+                <span
+                  aria-hidden
+                  style={{
+                    display: "inline-block",
+                    width: 1,
+                    height: 10,
+                    background: "#FFFFFF",
+                    opacity: 0.56,
+                  }}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Attention-Investors / Disclaimer */}
+      <div
+        className="flex flex-col"
+        style={{ padding: 12, background: "#1A092A", borderRadius: 12, gap: 10 }}
+      >
+        <div className="flex items-center justify-between">
+          <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 12, fontWeight: 700, color: "#FFFFFF" }}>
+            Attention Investors
+          </span>
+          <ChevronDown size={16} color="#AF91D1" />
+        </div>
+        <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 11, lineHeight: "16px", color: "#AF91D1" }}>
+          Investments in securities market are subject to market risks. Read all the related documents
+          carefully before investing. Brokerage will not exceed SEBI prescribed limit. Registration granted
+          by SEBI and certification from NISM in no way guarantee performance of the intermediary.
+        </span>
+      </div>
+
+      {/* Social icons */}
+      <div className="flex items-center" style={{ gap: 10 }}>
+        {["f", "X", "in", "IG", "YT", "TG"].map((s) => (
+          <SocialIcon key={s} label={s} />
+        ))}
+      </div>
+
+      {/* Legal row */}
+      <div className="flex flex-wrap items-center" style={{ gap: "6px 0", paddingTop: 12, borderTop: "1px solid #4B1F73" }}>
+        {["About us", "Privacy Policy", "Terms & Conditions", "Investor Charter", "Contact us"].map((l, i, arr) => (
+          <span key={l} className="flex items-center">
+            <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 11, color: "#AF91D1", padding: "0 8px" }}>
+              {l}
+            </span>
+            {i < arr.length - 1 && (
+              <span aria-hidden style={{ width: 1, height: 10, background: "#4B1F73" }} />
+            )}
+          </span>
+        ))}
+      </div>
+
+      <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 11, color: "#8B6BAE" }}>
+        © 2026 Upstox. All rights reserved.
+      </span>
+    </div>
+  );
+}
+
 // ───── System bottom bar (home indicator) ─────
 function SystemBar() {
   return (
@@ -6710,6 +7714,637 @@ function SystemBar() {
       style={{ height: 15, background: "#0C0C0C", padding: "6.5px 0" }}
     >
       <span style={{ width: 64, height: 2, background: "#FFFFFF", borderRadius: 100 }} aria-hidden />
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ░░░ DESKTOP SHELL — rendered when viewport ≥ 1024 px. Mobile path above
+// ░░░ is completely untouched. All layout tokens pulled from mobileColors (C).
+// ════════════════════════════════════════════════════════════════════════════
+
+type DesktopShellProps = {
+  scanUniverse: string;
+  setScanUniverse: (v: string) => void;
+  industries: string[];
+  setIndustries: (v: string[]) => void;
+  sectors: string[];
+  setSectors: (v: string[]) => void;
+  extraFilters: Filter[];
+  setExtraFilters: (v: Filter[]) => void;
+  filters: Filter[];
+};
+
+function DesktopShell(props: DesktopShellProps) {
+  const {
+    scanUniverse, setScanUniverse,
+    industries, setIndustries,
+    sectors, setSectors,
+    extraFilters, setExtraFilters,
+    filters,
+  } = props;
+
+  const [scannerName, setScannerName] = useState<string>("ORB Breakout Stocks");
+  const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
+  const [titleDraft, setTitleDraft] = useState<string>(scannerName);
+
+  const [addFilterOpen, setAddFilterOpen] = useState<boolean>(false);
+  const [openSheet, setOpenSheet] = useState<null | "universe" | "industries" | "sectors">(null);
+  const [expandedFilterIdx, setExpandedFilterIdx] = useState<number | null>(null);
+
+  // Results table: share the same column picker model used by mobile
+  const [selectedKeys, setSelectedKeys] = useState<string[]>(DEFAULT_SCRIP_COLUMNS);
+  const [pickerOpen, setPickerOpen] = useState<boolean>(false);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const selectedCols = selectedKeys
+    .map((k) => SCRIP_COLUMNS.find((c) => c.key === k))
+    .filter((c): c is ScripColumn => !!c);
+
+  const parsePct = (s?: string): number => {
+    if (!s) return 0;
+    const n = parseFloat(s.replace("%", "").replace(/,/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  };
+  const sortedScrips = [...SAMPLE_SCRIPS].sort((a, b) => {
+    const av = parsePct(a.chgPct);
+    const bv = parsePct(b.chgPct);
+    return sortDir === "desc" ? bv - av : av - bv;
+  });
+
+  const commitTitle = () => {
+    const trimmed = titleDraft.trim();
+    setScannerName(trimmed.length > 0 ? trimmed : scannerName);
+    setIsEditingTitle(false);
+  };
+  const cancelTitle = () => {
+    setTitleDraft(scannerName);
+    setIsEditingTitle(false);
+  };
+
+  const deleteFilterAt = (idx: number) => {
+    if (idx < 3) return; // first 3 are defaults; leave them
+    const extraIdx = idx - 3;
+    const next = extraFilters.slice();
+    next.splice(extraIdx, 1);
+    setExtraFilters(next);
+    if (expandedFilterIdx === idx) setExpandedFilterIdx(null);
+  };
+
+  const clearAllExtra = () => {
+    setExtraFilters([]);
+    setExpandedFilterIdx(null);
+  };
+
+  const toggleExpand = (idx: number) => {
+    setExpandedFilterIdx((cur) => (cur === idx ? null : idx));
+  };
+
+  const openFilterSheet = (label: string) => {
+    if (label === "Scan Universe") setOpenSheet("universe");
+    else if (label === "Industry") setOpenSheet("industries");
+    else if (label === "Sector") setOpenSheet("sectors");
+  };
+
+  return (
+    <div
+      className="flex flex-col"
+      style={{
+        minHeight: "100vh",
+        background: C.bgMuted,
+        fontFamily: "'Inter', system-ui, sans-serif",
+        color: C.textPrimary,
+      }}
+    >
+      {/* ──────── Top toolbar strip ──────── */}
+      <div
+        className="flex items-center"
+        style={{
+          height: 60,
+          padding: "0 20px",
+          background: C.bgDefault,
+          borderBottom: `1px solid ${C.ui3}`,
+          gap: 16,
+        }}
+      >
+        <div className="flex items-center" style={{ gap: 8, flex: 1, minWidth: 0 }}>
+          {isEditingTitle ? (
+            <input
+              autoFocus
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitTitle();
+                else if (e.key === "Escape") cancelTitle();
+              }}
+              style={{
+                height: 32,
+                padding: "0 8px",
+                border: `1px solid ${C.ui3}`,
+                borderRadius: 6,
+                fontSize: 16,
+                fontWeight: 600,
+                color: C.textPrimary,
+                background: C.bgDefault,
+                outline: "none",
+                minWidth: 280,
+              }}
+            />
+          ) : (
+            <>
+              <span
+                style={{
+                  fontSize: 16,
+                  fontWeight: 600,
+                  color: C.textPrimary,
+                  maxWidth: 520,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {scannerName || "Untitled screener"}
+              </span>
+              <button
+                aria-label="Rename screener"
+                onClick={() => { setTitleDraft(scannerName); setIsEditingTitle(true); }}
+                className="flex items-center justify-center"
+                style={{
+                  width: 28, height: 28, borderRadius: 6,
+                  background: "transparent", border: "none", cursor: "pointer",
+                }}
+              >
+                <Pencil size={14} color={C.textSecondary} />
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center" style={{ gap: 8 }}>
+          <button
+            aria-label="Share"
+            onClick={() => window.alert("Share coming soon")}
+            className="flex items-center justify-center"
+            style={{
+              width: 36, height: 36, borderRadius: 8,
+              border: `1px solid ${C.ui3}`, background: C.bgDefault, cursor: "pointer",
+            }}
+          >
+            <Share2 size={16} color={C.textPrimary} />
+          </button>
+          <button
+            aria-label="Alerts"
+            onClick={() => window.alert("Alert coming soon")}
+            className="flex items-center justify-center"
+            style={{
+              width: 36, height: 36, borderRadius: 8,
+              border: `1px solid ${C.ui3}`, background: C.bgDefault, cursor: "pointer",
+            }}
+          >
+            <Bell size={16} color={C.textPrimary} />
+          </button>
+          <button
+            onClick={() => window.alert("Saved")}
+            className="flex items-center justify-center"
+            style={{
+              height: 36, padding: "0 18px", borderRadius: 8,
+              background: C.brandPurple, color: "#FFFFFF",
+              fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer",
+            }}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+
+      {/* ──────── Two-column workspace ──────── */}
+      <div className="flex" style={{ flex: 1, minHeight: 0, height: "calc(100vh - 60px)" }}>
+        {/* Sidebar */}
+        <aside
+          className="flex flex-col"
+          style={{
+            width: 260,
+            flexShrink: 0,
+            background: C.bgDefault,
+            borderRight: `1px solid ${C.ui3}`,
+          }}
+        >
+          <div
+            className="flex items-center justify-between"
+            style={{
+              padding: "16px 16px 12px",
+              borderBottom: `1px solid ${C.ui2}`,
+            }}
+          >
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary }}>Filters</span>
+            <button
+              onClick={clearAllExtra}
+              style={{
+                background: "transparent", border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 600, color: C.brandPurple,
+              }}
+            >
+              Clear all
+            </button>
+          </div>
+
+          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0" }}>
+            {filters.map((f, idx) => {
+              const expanded = expandedFilterIdx === idx;
+              const canDelete = idx >= 3;
+              return (
+                <div key={`${f.label}-${idx}`}>
+                  <div
+                    className="flex items-center"
+                    style={{
+                      padding: "10px 16px",
+                      gap: 8,
+                      cursor: "pointer",
+                    }}
+                    onClick={() => idx < 3 ? openFilterSheet(f.label) : toggleExpand(idx)}
+                  >
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 6, height: 6, borderRadius: 3,
+                        background: C.brandPurple, flexShrink: 0,
+                      }}
+                    />
+                    <span
+                      style={{
+                        flex: 1,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: C.textPrimary,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {f.label}
+                    </span>
+                    {canDelete && (
+                      <button
+                        aria-label="Delete filter"
+                        onClick={(e) => { e.stopPropagation(); deleteFilterAt(idx); }}
+                        className="flex items-center justify-center"
+                        style={{
+                          width: 24, height: 24, borderRadius: 4,
+                          background: "transparent", border: "none", cursor: "pointer",
+                        }}
+                      >
+                        <Trash2 size={14} color={C.textSecondary} />
+                      </button>
+                    )}
+                    <button
+                      aria-label="Toggle summary"
+                      onClick={(e) => { e.stopPropagation(); toggleExpand(idx); }}
+                      className="flex items-center justify-center"
+                      style={{
+                        width: 24, height: 24, borderRadius: 4,
+                        background: "transparent", border: "none", cursor: "pointer",
+                      }}
+                    >
+                      <ChevronDown
+                        size={14}
+                        color={C.textSecondary}
+                        style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
+                      />
+                    </button>
+                  </div>
+                  {expanded && (
+                    <div
+                      style={{
+                        padding: "0 16px 10px 30px",
+                        fontSize: 12,
+                        color: C.textSecondary,
+                        lineHeight: "18px",
+                      }}
+                    >
+                      {f.value}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ padding: 12, borderTop: `1px solid ${C.ui2}` }}>
+            <button
+              onClick={() => setAddFilterOpen(true)}
+              className="flex items-center justify-center w-full"
+              style={{
+                height: 36,
+                borderRadius: 6,
+                border: `1px solid ${C.brandPurple}`,
+                background: C.bgDefault,
+                color: C.brandPurple,
+                fontSize: 13,
+                fontWeight: 600,
+                gap: 6,
+                cursor: "pointer",
+              }}
+            >
+              <Plus size={14} color={C.brandPurple} />
+              Add condition
+            </button>
+          </div>
+        </aside>
+
+        {/* Main pane: results table */}
+        <main className="flex flex-col" style={{ flex: 1, minWidth: 0, background: C.bgMuted }}>
+          <div
+            className="flex items-center justify-between"
+            style={{
+              padding: "12px 20px",
+              background: C.bgDefault,
+              borderBottom: `1px solid ${C.ui2}`,
+            }}
+          >
+            <span style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>
+              {SAMPLE_SCRIPS.length} scrips matched
+            </span>
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="flex items-center"
+              style={{
+                gap: 6,
+                height: 30,
+                padding: "0 12px",
+                border: `1px solid ${C.ui3}`,
+                borderRadius: 6,
+                background: C.bgDefault,
+                color: C.textPrimary,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              <Plus size={12} color={C.textPrimary} strokeWidth={2} />
+              Columns · {selectedCols.length}
+            </button>
+          </div>
+
+          <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: C.bgDefault }}>
+            <DesktopResultsTable
+              rows={sortedScrips}
+              extraCols={selectedCols}
+              sortDir={sortDir}
+              onToggleSort={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+            />
+          </div>
+        </main>
+      </div>
+
+      {/* ──────── Modal: Add filters ──────── */}
+      {addFilterOpen && (
+        <DesktopAddFiltersDialog
+          onClose={() => setAddFilterOpen(false)}
+          onPick={(f) => {
+            if (f) setExtraFilters([...extraFilters, f]);
+            setAddFilterOpen(false);
+          }}
+        />
+      )}
+
+      {/* ──────── Sheets for core filters — auto-centered on desktop ──────── */}
+      {openSheet === "universe" && (
+        <ScanUniverseSheet
+          value={scanUniverse}
+          onClose={() => setOpenSheet(null)}
+          onPick={(v) => { setScanUniverse(v); setOpenSheet(null); }}
+        />
+      )}
+      {openSheet === "industries" && (
+        <MultiSelectSheet
+          title="Industry"
+          options={INDUSTRY_OPTIONS}
+          value={industries}
+          onClose={() => setOpenSheet(null)}
+          onApply={(v) => { setIndustries(v); setOpenSheet(null); }}
+        />
+      )}
+      {openSheet === "sectors" && (
+        <MultiSelectSheet
+          title="Sector"
+          options={SECTOR_OPTIONS}
+          value={sectors}
+          onClose={() => setOpenSheet(null)}
+          onApply={(v) => { setSectors(v); setOpenSheet(null); }}
+        />
+      )}
+      {pickerOpen && (
+        <ColumnPickerSheet
+          value={selectedKeys}
+          onClose={() => setPickerOpen(false)}
+          onApply={(v) => { setSelectedKeys(v); setPickerOpen(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DesktopResultsTable({
+  rows,
+  extraCols,
+  sortDir,
+  onToggleSort,
+}: {
+  rows: ListItem[];
+  extraCols: ScripColumn[];
+  sortDir: "asc" | "desc";
+  onToggleSort: () => void;
+}) {
+  const headerCell: React.CSSProperties = {
+    fontSize: 11,
+    fontWeight: 600,
+    color: C.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    padding: "10px 12px",
+    background: C.bgMuted,
+    borderBottom: `1px solid ${C.ui2}`,
+    whiteSpace: "nowrap",
+  };
+  const bodyCell: React.CSSProperties = {
+    fontSize: 13,
+    color: C.textPrimary,
+    padding: "12px",
+    borderBottom: `1px solid ${C.ui2}`,
+    whiteSpace: "nowrap",
+  };
+
+  return (
+    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <thead>
+        <tr>
+          <th style={{ ...headerCell, textAlign: "left", width: 44 }}>#</th>
+          <th style={{ ...headerCell, textAlign: "left", minWidth: 180 }}>Symbol</th>
+          <th style={{ ...headerCell, textAlign: "right" }}>Price</th>
+          <th
+            style={{ ...headerCell, textAlign: "right", cursor: "pointer" }}
+            onClick={onToggleSort}
+          >
+            1D Chg% {sortDir === "desc" ? "↓" : "↑"}
+          </th>
+          <th style={{ ...headerCell, textAlign: "right" }}>Volume</th>
+          {extraCols.map((col) => (
+            <th
+              key={col.key}
+              style={{
+                ...headerCell,
+                textAlign: col.align ?? "right",
+                minWidth: col.minWidth ?? 96,
+              }}
+            >
+              {col.label}
+            </th>
+          ))}
+          <th
+            style={{
+              ...headerCell,
+              textAlign: "center",
+              position: "sticky",
+              right: 0,
+              background: C.bgMuted,
+              width: 72,
+            }}
+          >
+            Watch
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((item, idx) => (
+          <tr
+            key={item.symbol}
+            style={{ background: C.bgDefault }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = C.bgMuted)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = C.bgDefault)}
+          >
+            <td style={{ ...bodyCell, color: C.textSecondary }}>{idx + 1}</td>
+            <td style={bodyCell}>
+              <div className="flex flex-col" style={{ gap: 2 }}>
+                <span style={{ fontWeight: 600 }}>{item.symbol}</span>
+                <span style={{ fontSize: 11, color: C.textTertiary }}>
+                  {item.exchange}{item.segment ? ` · ${item.segment}` : ""}
+                </span>
+              </div>
+            </td>
+            <td style={{ ...bodyCell, textAlign: "right", fontWeight: 500 }}>₹ {item.ltp}</td>
+            <td
+              style={{
+                ...bodyCell,
+                textAlign: "right",
+                fontWeight: 600,
+                color: item.dir === "pos" ? C.posText : C.negText,
+              }}
+            >
+              {item.chgPct ?? "—"}
+            </td>
+            <td style={{ ...bodyCell, textAlign: "right" }}>{item.volume ?? "—"}</td>
+            {extraCols.map((col) => {
+              const v = col.accessor(item);
+              const color = col.colored ? (item.dir === "pos" ? C.posText : C.negText) : C.textPrimary;
+              return (
+                <td
+                  key={col.key}
+                  style={{
+                    ...bodyCell,
+                    textAlign: col.align ?? "right",
+                    color,
+                    fontWeight: col.colored ? 600 : 500,
+                  }}
+                >
+                  {v ?? "—"}
+                </td>
+              );
+            })}
+            <td
+              style={{
+                ...bodyCell,
+                textAlign: "center",
+                position: "sticky",
+                right: 0,
+                background: "inherit",
+              }}
+            >
+              <button
+                aria-label="Add to watchlist"
+                className="flex items-center justify-center"
+                style={{
+                  width: 28, height: 28, borderRadius: 4,
+                  border: `1px solid ${C.ui3}`, background: C.bgDefault,
+                  cursor: "pointer", margin: "0 auto",
+                }}
+              >
+                <Plus size={14} color={C.brandPurple} />
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function DesktopAddFiltersDialog({
+  onClose,
+  onPick,
+}: {
+  onClose: () => void;
+  onPick: (f?: Filter) => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center"
+      style={{ zIndex: 60, background: "rgba(0,0,0,0.4)" }}
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex flex-col"
+        style={{
+          width: "min(900px, 94vw)",
+          height: "min(640px, 86vh)",
+          background: C.bgDefault,
+          borderRadius: 12,
+          overflow: "hidden",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
+        }}
+      >
+        <div
+          className="flex items-center"
+          style={{
+            height: 56,
+            padding: "0 20px",
+            gap: 12,
+            borderBottom: `1px solid ${C.ui2}`,
+          }}
+        >
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary }}>Add filters</span>
+          <div className="flex-1" />
+          <button
+            aria-label="Close"
+            onClick={onClose}
+            className="flex items-center justify-center"
+            style={{
+              width: 32, height: 32, borderRadius: 6,
+              background: "transparent", border: "none", cursor: "pointer",
+            }}
+          >
+            <X size={18} color={C.textSecondary} />
+          </button>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+          <AddFilterScreen
+            onBack={onClose}
+            onDone={(f) => onPick(f)}
+          />
+        </div>
+      </div>
     </div>
   );
 }
